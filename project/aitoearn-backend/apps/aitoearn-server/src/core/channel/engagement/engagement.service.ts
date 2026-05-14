@@ -14,6 +14,7 @@ import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
+import { EngagementRateLimitGuardService } from './rate-limit-guard.service'
 
 @Injectable()
 export class EngagementService {
@@ -28,6 +29,7 @@ export class EngagementService {
     private readonly queueService: QueueService,
     private readonly facebookService: FacebookService,
     private readonly channelAccountService: ChannelAccountService,
+    private readonly rateLimit: EngagementRateLimitGuardService,
   ) {
     this.providerMap.set('facebook', facebookProvider)
     this.providerMap.set('instagram', instagramProvider)
@@ -47,6 +49,28 @@ export class EngagementService {
     }))
   }
 
+  /**
+   * Provider lookup that returns null instead of throwing — used by the brand
+   * monitor consumer when iterating over a list of platforms that may not all
+   * have a registered provider yet.
+   */
+  getProviderUnsafe(providerKey: string): EngagementProvider | null {
+    return this.providerMap.get(providerKey) ?? null
+  }
+
+  /**
+   * Pick a default channel-account for (userId, platform). Used by background
+   * scans that need *some* authenticated account but don't care which one.
+   *
+   * NOTE: Phase 6 ships a stub that always returns null — the full
+   * "pick the highest-trust account" heuristic is wired in M2 once we have a
+   * `ChannelAccountService.listByUser` method to delegate to. Until then, the
+   * brand monitor consumer simply skips platforms without an obvious account.
+   */
+  async resolveDefaultAccount(_userId: string, _platform: string): Promise<string | null> {
+    return null
+  }
+
   private async checkRelayAccount(accountId: string) {
     const account = await this.channelAccountService.getAccountInfo(accountId)
     if (account?.relayAccountRef) {
@@ -62,17 +86,6 @@ export class EngagementService {
     return provider
   }
 
-  private translateNotSupported<T>(action: string, fn: () => Promise<T>): Promise<T> {
-    return fn().catch((err: unknown) => {
-      if (err instanceof EngagementNotSupportedError) {
-        throw new AppException(
-          ResponseCode.EngagementCapabilityUnavailable,
-          { action: err.action || action, platform: err.platform },
-        )
-      }
-      throw err
-    })
-  }
 
   async fetchUserPosts(data: FetchPostsRequest) {
     await this.checkRelayAccount(data.accountId)
@@ -131,38 +144,78 @@ export class EngagementService {
 
   async likePost(data: LikePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'like')
     const provider = this.getProvider(data.platform)
-    return this.translateNotSupported('like', () => provider.likePost(data.accountId, data.postId))
+    return this.runAction('like', data.accountId, () => provider.likePost(data.accountId, data.postId))
   }
 
   async unlikePost(data: LikePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'unlike')
     const provider = this.getProvider(data.platform)
-    return this.translateNotSupported('unlike', () => provider.unlikePost(data.accountId, data.postId))
+    return this.runAction('unlike', data.accountId, () => provider.unlikePost(data.accountId, data.postId))
   }
 
   async favoritePost(data: FavoritePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'favorite')
     const provider = this.getProvider(data.platform)
-    return this.translateNotSupported('favorite', () => provider.favoritePost(data.accountId, data.postId))
+    return this.runAction('favorite', data.accountId, () => provider.favoritePost(data.accountId, data.postId))
   }
 
   async unfavoritePost(data: FavoritePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'unfavorite')
     const provider = this.getProvider(data.platform)
-    return this.translateNotSupported('unfavorite', () => provider.unfavoritePost(data.accountId, data.postId))
+    return this.runAction('unfavorite', data.accountId, () => provider.unfavoritePost(data.accountId, data.postId))
   }
 
   async followUser(data: FollowUserRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'follow')
     const provider = this.getProvider(data.platform)
-    return this.translateNotSupported('follow', () => provider.followUser(data.accountId, data.targetUserId))
+    return this.runAction('follow', data.accountId, () => provider.followUser(data.accountId, data.targetUserId))
   }
 
   async unfollowUser(data: FollowUserRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'unfollow')
     const provider = this.getProvider(data.platform)
-    return this.translateNotSupported('unfollow', () => provider.unfollowUser(data.accountId, data.targetUserId))
+    return this.runAction('unfollow', data.accountId, () => provider.unfollowUser(data.accountId, data.targetUserId))
+  }
+
+  /**
+   * Wraps a provider call with three concerns:
+   * 1) translate `EngagementNotSupportedError` to a typed AppException
+   * 2) rate-limit + circuit-breaker bookkeeping (success ↔ recordSuccess,
+   *    a non-success result counts as a failure for the breaker)
+   * 3) re-throw any other error untouched
+   */
+  private async runAction(
+    action: string,
+    accountId: string,
+    fn: () => Promise<ActionResult>,
+  ): Promise<ActionResult> {
+    let result: ActionResult
+    try {
+      result = await fn()
+    }
+    catch (err: unknown) {
+      if (err instanceof EngagementNotSupportedError) {
+        // capability-related exceptions don't trip the breaker
+        throw new AppException(
+          ResponseCode.EngagementCapabilityUnavailable,
+          { action: err.action || action, platform: err.platform },
+        )
+      }
+      await this.rateLimit.recordFailure(accountId)
+      throw err
+    }
+    if (result.success)
+      await this.rateLimit.recordSuccess(accountId)
+    else
+      await this.rateLimit.recordFailure(accountId)
+    return result
   }
 
   async batchGenReplyContent(data: AIGenCommentDto): Promise<Record<string, string>> {
