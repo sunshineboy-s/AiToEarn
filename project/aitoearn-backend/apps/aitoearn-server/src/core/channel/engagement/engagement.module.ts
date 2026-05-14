@@ -3,6 +3,7 @@ import { ChannelSharedModule } from '../platforms/channel-shared.module'
 import { MetaModule } from '../platforms/meta/meta.module'
 import { YoutubeModule } from '../platforms/youtube/youtube.module'
 import { EngagementAutomationRpcService } from './automation/automation-rpc.service'
+import { DouyinAutomationProvider } from './automation/douyin-automation.provider'
 import { XhsAutomationProvider } from './automation/xhs-automation.provider'
 import { BrandMonitorScanConsumer } from './brand/brand-monitor.consumer'
 import { BrandMonitorController } from './brand/brand-monitor.controller'
@@ -38,6 +39,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     ThreadsEngagementProvider,
     YoutubeEngagementProvider,
     XhsAutomationProvider,
+    DouyinAutomationProvider,
     EngagementAutomationRpcService,
     EngagementService,
     EngagementRecordService,
@@ -55,6 +57,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     ThreadsEngagementProvider,
     YoutubeEngagementProvider,
     XhsAutomationProvider,
+    DouyinAutomationProvider,
     EngagementAutomationRpcService,
     EngagementService,
     EngagementRecordService,

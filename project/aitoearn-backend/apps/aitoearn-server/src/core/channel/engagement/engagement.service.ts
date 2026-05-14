@@ -7,6 +7,7 @@ import { RelayAccountException } from '../../relay/relay-account.exception'
 import { ChannelAccountService } from '../platforms/channel-account.service'
 import { FacebookService } from '../platforms/meta/facebook.service'
 import { ReplyToCommentAnswer } from './ai.dto'
+import { DouyinAutomationProvider } from './automation/douyin-automation.provider'
 import { XhsAutomationProvider } from './automation/xhs-automation.provider'
 import { AIGenCommentDto, FavoritePostRequest, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, FollowUserRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
 import { ActionResult, EngagementCapability, EngagementNotSupportedError, EngagementProvider, PublishCommentResponse } from './engagement.interface'
@@ -26,6 +27,7 @@ export class EngagementService {
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
     xhsAutomationProvider: XhsAutomationProvider,
+    douyinAutomationProvider: DouyinAutomationProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly queueService: QueueService,
@@ -38,6 +40,7 @@ export class EngagementService {
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
     this.providerMap.set('xhs', xhsAutomationProvider)
+    this.providerMap.set('douyin', douyinAutomationProvider)
   }
 
   /**

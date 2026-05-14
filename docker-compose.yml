@@ -253,6 +253,51 @@ services:
       retries: 3
       start_period: 60s
 
+  aitoearn-automation:
+    # Server-side Playwright worker for the Engage Agent. Replaces the old
+    # browser extension. Optional: only required when xhs / douyin / wxsph /
+    # kwai automation is enabled. Without this service the API still serves
+    # the Facebook / Instagram / Threads / YouTube providers (api engine).
+    image: aitoearn/aitoearn-automation:latest
+    pull_policy: always
+    container_name: aitoearn-automation
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./project/aitoearn-backend/apps/aitoearn-automation/config/config.js:/app/config.js:ro
+      # Mount your cookie file here. Format: see apps/aitoearn-automation/README.md
+      - automation-cookies:/run/secrets:ro
+    networks:
+      - aitoearn-network
+    # Playwright needs a larger /dev/shm to keep Chromium from crashing on Linux.
+    shm_size: "1gb"
+    environment:
+      NODE_ENV: production
+      APP_NAME: aitoearn-automation
+
+      AUTOMATION_PORT: "3010"
+      AUTOMATION_INTERNAL_TOKEN: change-this-secret-token
+
+      # BullMQ — must point at the same Redis as aitoearn-server so the
+      # engagement_automation_action queue is shared.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: password
+
+      # Browser
+      AUTOMATION_HEADLESS: "true"
+      AUTOMATION_BROWSER_POOL_SIZE: "3"
+      AUTOMATION_MIN_DELAY_MS: "800"
+      AUTOMATION_MAX_DELAY_MS: "2400"
+      # AUTOMATION_PROXY: http://user:pass@proxy.example.com:8080
+
+      # Cookie source — pick one. Path on the container side (mount above).
+      AUTOMATION_COOKIE_FILE: /run/secrets/xhs-default.json
+      # AUTOMATION_COOKIE_JSON: '{"xhs:default":[...]}'
+
   aitoearn-web:
     image: aitoearn/aitoearn-web:latest
     pull_policy: always
@@ -310,4 +355,6 @@ volumes:
   rustfs-data:
     driver: local
   init-data:
+    driver: local
+  automation-cookies:
     driver: local
