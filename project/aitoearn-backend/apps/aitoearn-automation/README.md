@@ -28,19 +28,25 @@ Each request:
 Prereqs: Node 24, pnpm 9+, and a logged-in xiaohongshu.com account in any browser.
 
 ```bash
-# 1. install deps (from the backend workspace root)
+# 1. install deps from the backend workspace root.
+#    The lockfile is committed and stays in sync — use --frozen-lockfile in CI.
 cd project/aitoearn-backend
-pnpm install
+pnpm install --frozen-lockfile
+
+# Playwright browsers (Chromium only; ~150MB)
 pnpm exec playwright install chromium
 
-# 2. dump your xiaohongshu cookies to a JSON file
-#    (Chrome DevTools → Application → Cookies → right-click → Export
-#     OR a Chrome extension like "EditThisCookie" / "Cookie-Editor")
+# 2. dump your xiaohongshu cookies to a JSON file.
+#    Pick any of: Chrome DevTools "storageState" export, "EditThisCookie",
+#    or "Cookie-Editor". All three formats are accepted by the Vault.
 mkdir -p apps/aitoearn-automation/.cookies
 mv ~/Downloads/xiaohongshu-cookies.json \
    apps/aitoearn-automation/.cookies/xhs-default.json
 
-# 3. set env + serve
+# 3. set env + serve.
+#    No need to copy local.config.js / dev.config.js / prod.config.js — the
+#    PoC reads ./apps/aitoearn-automation/config/config.js directly. Override
+#    individual values via env vars (see Configuration below).
 export AUTOMATION_COOKIE_FILE="$PWD/apps/aitoearn-automation/.cookies/xhs-default.json"
 export AUTOMATION_HEADLESS="false"   # see the browser the first time
 pnpm nx serve aitoearn-automation
@@ -56,10 +62,19 @@ curl -X POST http://localhost:3010/api/automation/xhs/note/like \
 
 curl -X POST http://localhost:3010/api/automation/xhs/note/reply \
   -H 'content-type: application/json' \
-  -d '{"noteUrl":"https://www.xiaohongshu.com/explore/<note-id>","comment":"看起来很棒!"}'
+  -d '{"noteUrl":"https://www.xiaohongshu.com/explore/<note-id>","comment":"\u770b\u8d77\u6765\u5f88\u68d2!"}'
 ```
 
 API reference (Scalar / OpenAPI): http://localhost:3010/api/docs
+
+> **Editor / OS encoding warning (Windows users especially)**
+>
+> Some Windows IDEs and terminals default to GBK and will silently corrupt
+> Chinese characters when saving UTF-8 files. To stay safe, every Chinese
+> string the runtime depends on (selector text, sample reply) is written as
+> a `\uXXXX` escape inside `xhs.selectors.ts`. **Don't replace these escapes
+> with raw Chinese characters** unless you've verified your editor saves the
+> file as UTF-8.
 
 ## Cookie file format
 

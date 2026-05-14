@@ -45,21 +45,21 @@
           "buildTarget": "aitoearn-automation:build:development",
           "args": [
             "-c",
-            "{workspaceRoot}/apps/aitoearn-automation/config/local.config.js"
+            "{workspaceRoot}/apps/aitoearn-automation/config/config.js"
           ]
         },
         "dev": {
           "buildTarget": "aitoearn-automation:build:development",
           "args": [
             "-c",
-            "{workspaceRoot}/apps/aitoearn-automation/config/dev.config.js"
+            "{workspaceRoot}/apps/aitoearn-automation/config/config.js"
           ]
         },
         "prod": {
           "buildTarget": "aitoearn-automation:build:production",
           "args": [
             "-c",
-            "{workspaceRoot}/apps/aitoearn-automation/config/prod.config.js"
+            "{workspaceRoot}/apps/aitoearn-automation/config/config.js"
           ]
         }
       }

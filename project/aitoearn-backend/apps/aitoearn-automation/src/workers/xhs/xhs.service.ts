@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import type { Page } from 'playwright'
 import { Injectable, Logger } from '@nestjs/common'
 import { BrowserPoolService } from '../../browser/browser-pool.service'
@@ -25,42 +26,37 @@ export class XhsService {
   ) {}
 
   async likeNote(accountId: string, noteUrl: string): Promise<ActionResult<XhsLikeData>> {
-    return this.run(accountId, async (page) => {
+    return this.run<XhsLikeData>(accountId, async (page) => {
       const noteId = this.extractNoteId(noteUrl)
       await page.goto(noteUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
       await this.browserPool.humanDelay()
 
       const likeButton = await this.firstVisible(page, XhsSelectors.note.likeButton)
-      if (!likeButton) {
+      if (!likeButton)
         return { success: false, error: 'like button not found (selector drift?)' }
-      }
 
       const wasLiked = await likeButton.evaluate(
-        (el, klass) => el.classList.contains(klass),
+        (el, klass) => (el as Element).classList.contains(klass),
         XhsSelectors.note.likedClass,
       )
       if (wasLiked) {
-        return {
-          success: true,
-          data: {
-            noteId,
-            alreadyLiked: true,
-            likeCount: await this.readFirstText(page, XhsSelectors.note.likeCount),
-          },
+        const data: XhsLikeData = {
+          noteId,
+          alreadyLiked: true,
+          likeCount: await this.readFirstText(page, XhsSelectors.note.likeCount),
         }
+        return { success: true, data }
       }
 
       await likeButton.click({ delay: 80 + Math.floor(Math.random() * 120) })
       await this.browserPool.humanDelay()
 
-      return {
-        success: true,
-        data: {
-          noteId,
-          alreadyLiked: false,
-          likeCount: await this.readFirstText(page, XhsSelectors.note.likeCount),
-        },
+      const data: XhsLikeData = {
+        noteId,
+        alreadyLiked: false,
+        likeCount: await this.readFirstText(page, XhsSelectors.note.likeCount),
       }
+      return { success: true, data }
     })
   }
 
@@ -69,7 +65,7 @@ export class XhsService {
     noteUrl: string,
     comment: string,
   ): Promise<ActionResult<XhsReplyData>> {
-    return this.run(accountId, async (page) => {
+    return this.run<XhsReplyData>(accountId, async (page) => {
       const noteId = this.extractNoteId(noteUrl)
       await page.goto(noteUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
       await this.browserPool.humanDelay()
@@ -90,7 +86,8 @@ export class XhsService {
       await submit.click({ delay: 80 })
       await page.waitForTimeout(1500)
 
-      return { success: true, data: { noteId, comment } }
+      const data: XhsReplyData = { noteId, comment }
+      return { success: true, data }
     })
   }
 
@@ -99,7 +96,7 @@ export class XhsService {
     keyword: string,
     limit: number,
   ): Promise<ActionResult<XhsSearchData>> {
-    return this.run(accountId, async (page) => {
+    return this.run<XhsSearchData>(accountId, async (page) => {
       const url = `https://www.xiaohongshu.com/search_result/?keyword=${encodeURIComponent(keyword)}&source=web_explore_feed`
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
       await page.waitForSelector(XhsSelectors.search.container, { timeout: SHORT_TIMEOUT_MS }).catch(() => {})
@@ -116,18 +113,26 @@ export class XhsService {
         (anchors, sel) => {
           const seen = new Set<string>()
           const out: { noteId: string, title: string, url: string, authorName?: string, likeCount?: string, thumbnail?: string }[] = []
-          for (const a of anchors as HTMLAnchorElement[]) {
+          // Helpers run inside the page, so DOM types are available there.
+          const text = (root: Element, selector: string): string | undefined => {
+            const el = root.querySelector(selector)
+            const value = el?.textContent?.trim()
+            return value && value.length > 0 ? value : undefined
+          }
+          for (const node of anchors) {
+            const a = node as HTMLAnchorElement
             const href = a.href || ''
             const m = href.match(/\/(?:explore|discovery\/item|search_result)\/([0-9a-f]{20,})/i)
             const noteId = m?.[1] ?? href
             if (!noteId || seen.has(noteId))
               continue
             seen.add(noteId)
-            const card = a.closest('section, .note-item, .feed-item') ?? a
-            const title = (card.querySelector(sel.itemTitle) as HTMLElement | null)?.innerText?.trim() ?? ''
-            const authorName = (card.querySelector(sel.itemAuthor) as HTMLElement | null)?.innerText?.trim() ?? undefined
-            const likeCount = (card.querySelector(sel.itemLike) as HTMLElement | null)?.innerText?.trim() ?? undefined
-            const thumbnail = (card.querySelector(sel.itemThumb) as HTMLImageElement | null)?.src ?? undefined
+            const card = (a.closest('section, .note-item, .feed-item') ?? a) as Element
+            const title = text(card, sel.itemTitle) ?? ''
+            const authorName = text(card, sel.itemAuthor)
+            const likeCount = text(card, sel.itemLike)
+            const thumb = card.querySelector(sel.itemThumb) as HTMLImageElement | null
+            const thumbnail = thumb?.src
             out.push({ noteId, title, url: href, authorName, likeCount, thumbnail })
           }
           return out
@@ -150,7 +155,7 @@ export class XhsService {
   ): Promise<ActionResult<T>> {
     const cookies = this.cookieVault.get(PLATFORM, accountId)
     if (!cookies.length)
-      this.logger.warn(`xhs:${accountId} has no cookies — proceeding anonymously (likely to fail)`)
+      this.logger.warn(`xhs:${accountId} has no cookies; proceeding anonymously (likely to fail)`)
 
     const ownerKey = `${PLATFORM}:${accountId}`
     const { page, release } = await this.browserPool.acquire(ownerKey, cookies)
@@ -169,7 +174,7 @@ export class XhsService {
 
   private async firstVisible(page: Page, selectors: readonly string[]) {
     for (const sel of selectors) {
-      const handle = await page.locator(sel).first()
+      const handle = page.locator(sel).first()
       if (await handle.count().catch(() => 0)) {
         try {
           await handle.waitFor({ state: 'visible', timeout: SHORT_TIMEOUT_MS })
@@ -185,9 +190,10 @@ export class XhsService {
 
   private async readFirstText(page: Page, selectors: readonly string[]): Promise<string | undefined> {
     for (const sel of selectors) {
-      const text = await page.locator(sel).first().innerText().catch(() => '')
-      if (text)
-        return text.trim()
+      const text = await page.locator(sel).first().textContent().catch(() => null)
+      const trimmed = text?.trim()
+      if (trimmed && trimmed.length > 0)
+        return trimmed
     }
     return undefined
   }
