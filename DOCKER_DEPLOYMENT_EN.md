@@ -217,6 +217,53 @@ ASSETS_CONFIG: '{"provider":"s3","region":"ap-southeast-1","bucketName":"your-bu
 | `MAIL_USER` / `MAIL_PASS` | aitoearn-server | SMTP email service | Your SMTP provider |
 | `ALI_SMS_*` (4 vars) | aitoearn-server | Aliyun SMS | https://dysms.console.aliyun.com |
 
+### Engage Automation Service (no browser plugin)
+
+The Engage Agent — auto-like, auto-favorite, auto-follow, AI smart replies,
+comment mining and brand monitoring — runs **entirely server-side** through
+the `aitoearn-automation` container. There is no browser extension to install
+on the user side; the service drives a stealth-patched Chromium via Playwright
+and consumes BullMQ jobs published by `aitoearn-server` on the
+`engagement_automation_action` queue.
+
+The service is included in `docker-compose.yml` and starts automatically with
+`docker compose up -d`. The most common things you'll want to tune:
+
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `AUTOMATION_HEADLESS` | `true` | Set `false` to watch Chromium during local debugging |
+| `AUTOMATION_BROWSER_POOL_SIZE` | `3` | Max concurrent BrowserContexts per worker |
+| `AUTOMATION_PROXY` | _none_ | `http://user:pass@host:port` — strongly recommended in production |
+| `AUTOMATION_MIN_DELAY_MS` / `_MAX_DELAY_MS` | `800` / `2400` | Human-like pacing between actions |
+| `AUTOMATION_COOKIE_FILE` / `AUTOMATION_COOKIE_JSON` | _empty_ | Cookie source for authenticated actions (PoC). Production swaps for the encrypted vault — see `apps/aitoearn-automation/README.md`. |
+
+#### Cookie import (PoC)
+
+The PoC accepts cookies as a JSON file mounted into the container or an
+inline JSON env var. Either format below works:
+
+```jsonc
+// Playwright storageState (preferred)
+{ "cookies": [ { "name": "web_session", "value": "...", "domain": ".xiaohongshu.com" } ] }
+
+// keyed map for multi-account
+{
+  "xhs:default": [ /* cookies */ ],
+  "xhs:my-other-account": [ /* cookies */ ]
+}
+```
+
+Production deployments should write encrypted cookies through the
+`engagementCookieVault` collection (AES-256-GCM is the schema target — see
+`.kiro/specs/engage-built-in/design.md` §3.5).
+
+#### What capabilities are available?
+
+The control plane exposes `GET /api/channel/engagement/capabilities` and
+returns a per-platform matrix the frontend uses to enable/disable buttons.
+The xhs row is provided by the automation worker; the rest are platform
+APIs (Facebook, YouTube, Twitter, etc.).
+
 ---
 
 ## Operations Reference

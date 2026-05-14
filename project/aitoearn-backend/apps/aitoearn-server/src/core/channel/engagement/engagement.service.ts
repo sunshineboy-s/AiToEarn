@@ -15,6 +15,7 @@ import { EngagementRecordService } from './engagement.record.service'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
+import { TwitterEngagementProvider } from './providers/twitter.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
 import { EngagementRateLimitGuardService } from './rate-limit-guard.service'
 
@@ -26,6 +27,7 @@ export class EngagementService {
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
+    twitterProvider: TwitterEngagementProvider,
     xhsAutomationProvider: XhsAutomationProvider,
     douyinAutomationProvider: DouyinAutomationProvider,
     private readonly aiService: AiService,
@@ -39,6 +41,7 @@ export class EngagementService {
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('twitter', twitterProvider)
     this.providerMap.set('xhs', xhsAutomationProvider)
     this.providerMap.set('douyin', douyinAutomationProvider)
   }

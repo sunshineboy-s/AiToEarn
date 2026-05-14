@@ -271,10 +271,12 @@ services:
       - automation-cookies:/run/secrets:ro
     networks:
       - aitoearn-network
-    # Playwright needs a larger /dev/shm to keep Chromium from crashing on Linux.
+    # Playwright on Linux occasionally crashes Chromium with the default 64MB
+    # /dev/shm. 1GB is the value the official Playwright docs recommend.
     shm_size: "1gb"
     environment:
       NODE_ENV: production
+      APP_ENV: production
       APP_NAME: aitoearn-automation
 
       AUTOMATION_PORT: "3010"
@@ -287,7 +289,7 @@ services:
       REDIS_USERNAME: default
       REDIS_PASSWORD: password
 
-      # Browser
+      # Browser pool tuning
       AUTOMATION_HEADLESS: "true"
       AUTOMATION_BROWSER_POOL_SIZE: "3"
       AUTOMATION_MIN_DELAY_MS: "800"
@@ -295,8 +297,16 @@ services:
       # AUTOMATION_PROXY: http://user:pass@proxy.example.com:8080
 
       # Cookie source — pick one. Path on the container side (mount above).
+      # Production deploys should swap for the encrypted vault — see
+      # apps/aitoearn-automation/README.md and design.md §3.5.
       AUTOMATION_COOKIE_FILE: /run/secrets/xhs-default.json
       # AUTOMATION_COOKIE_JSON: '{"xhs:default":[...]}'
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3010/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   aitoearn-web:
     image: aitoearn/aitoearn-web:latest

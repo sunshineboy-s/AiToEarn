@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ChannelSharedModule } from '../platforms/channel-shared.module'
 import { MetaModule } from '../platforms/meta/meta.module'
+import { TwitterModule } from '../platforms/twitter/twitter.module'
 import { YoutubeModule } from '../platforms/youtube/youtube.module'
 import { EngagementAutomationRpcService } from './automation/automation-rpc.service'
 import { DouyinAutomationProvider } from './automation/douyin-automation.provider'
@@ -17,6 +18,7 @@ import { EngagementMiningService } from './mining/engagement-mining.service'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
+import { TwitterEngagementProvider } from './providers/twitter.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
 import { EngagementRateLimitGuardService } from './rate-limit-guard.service'
 import { EngagementTaskDistributionConsumer } from './workers/distribute-engagement-task.consumer'
@@ -27,6 +29,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     ChannelSharedModule,
     MetaModule,
     YoutubeModule,
+    TwitterModule,
   ],
   controllers: [
     EngagementController,
@@ -38,6 +41,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     InstagramEngagementProvider,
     ThreadsEngagementProvider,
     YoutubeEngagementProvider,
+    TwitterEngagementProvider,
     XhsAutomationProvider,
     DouyinAutomationProvider,
     EngagementAutomationRpcService,
@@ -56,6 +60,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     InstagramEngagementProvider,
     ThreadsEngagementProvider,
     YoutubeEngagementProvider,
+    TwitterEngagementProvider,
     XhsAutomationProvider,
     DouyinAutomationProvider,
     EngagementAutomationRpcService,

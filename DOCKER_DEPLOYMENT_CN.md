@@ -217,6 +217,47 @@ ASSETS_CONFIG: '{"provider":"s3","region":"ap-southeast-1","bucketName":"your-bu
 | `MAIL_USER` / `MAIL_PASS` | aitoearn-server | SMTP 邮件服务 | 你的 SMTP 服务商 |
 | `ALI_SMS_ACCESS_KEY_ID` 等 4 项 | aitoearn-server | 阿里云短信 | https://dysms.console.aliyun.com |
 
+### Engage 自动化服务（无需浏览器插件）
+
+Engage Agent —— 自动点赞、自动收藏、自动关注、AI 智能回复、评论挖掘与品牌监测 ——
+完全在后端运行,由 `aitoearn-automation` 容器承载。**用户端无需安装任何浏览器插件**;
+该服务用 Playwright + Stealth 驱动 Chromium,通过 BullMQ 队列
+(`engagement_automation_action`)接收来自 `aitoearn-server` 的指令。
+
+服务已写入 `docker-compose.yml`,`docker compose up -d` 时自动启动。常用调参:
+
+| 变量 | 默认 | 作用 |
+|------|------|------|
+| `AUTOMATION_HEADLESS` | `true` | 本地调试时设为 `false` 可看到 Chromium |
+| `AUTOMATION_BROWSER_POOL_SIZE` | `3` | 单个 worker 最大并发 BrowserContext 数 |
+| `AUTOMATION_PROXY` | 无 | `http://user:pass@host:port` —— 生产强烈建议配代理 |
+| `AUTOMATION_MIN_DELAY_MS` / `_MAX_DELAY_MS` | `800` / `2400` | 动作之间的拟人节奏 |
+| `AUTOMATION_COOKIE_FILE` / `AUTOMATION_COOKIE_JSON` | 空 | Cookie 注入(PoC),生产将切换到加密 vault |
+
+#### Cookie 导入(PoC)
+
+PoC 接受挂载到容器内的 JSON 文件,或通过 env 直接传入 JSON。两种格式都可:
+
+```jsonc
+// Playwright storageState 格式(推荐)
+{ "cookies": [ { "name": "web_session", "value": "...", "domain": ".xiaohongshu.com" } ] }
+
+// 多账号 keyed map
+{
+  "xhs:default": [ /* cookies */ ],
+  "xhs:my-other-account": [ /* cookies */ ]
+}
+```
+
+生产部署应通过 `engagementCookieVault` 集合写入加密后的 cookie(目标格式 AES-256-GCM,
+详见 `.kiro/specs/engage-built-in/design.md` §3.5)。
+
+#### 当前支持哪些动作?
+
+控制面暴露 `GET /api/channel/engagement/capabilities`,返回各平台动作矩阵,
+前端据此启用/禁用按钮。其中 xhs 一行走自动化引擎,其余走各平台开放 API
+(Facebook / YouTube / Twitter 等)。
+
 ---
 
 ## 运维参考

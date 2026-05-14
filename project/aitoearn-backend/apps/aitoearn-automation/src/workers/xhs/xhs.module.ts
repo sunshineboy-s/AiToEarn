@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common'
-import { DouyinModule } from '../douyin/douyin.module'
-import { XhsAutomationConsumer } from './xhs.consumer'
 import { XhsController } from './xhs.controller'
 import { XhsService } from './xhs.service'
 
+/**
+ * Hosts the XHS Playwright service + REST controller. The BullMQ consumer
+ * lives in `workers/automation.module.ts` and depends on this module's
+ * exported XhsService.
+ */
 @Module({
-  imports: [DouyinModule],
   controllers: [XhsController],
-  providers: [XhsService, XhsAutomationConsumer],
+  providers: [XhsService],
   exports: [XhsService],
 })
 export class XhsModule {}

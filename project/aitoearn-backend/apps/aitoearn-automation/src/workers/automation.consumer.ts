@@ -6,33 +6,29 @@ import {
   QueueProcessor,
 } from '@yikart/aitoearn-queue'
 import { Job } from 'bullmq'
-import { DouyinService } from '../douyin/douyin.service'
-import { ActionResult } from './xhs.types'
-import { XhsService } from './xhs.service'
+import { DouyinService } from './douyin/douyin.service'
+import { XhsService } from './xhs/xhs.service'
+import { ActionResult } from './xhs/xhs.types'
 
 /**
- * Bridge between BullMQ and the platform Playwright workers.
+ * Single dispatcher across all automation platforms.
  *
- * Job lifecycle (request/response over BullMQ):
- *   1. aitoearn-server enqueues with { correlationId, platform, action, target, message? }
- *   2. this consumer reads, dispatches by `platform` → service, then by
- *      `action` → method, and *returns* the result — BullMQ stores the
- *      return value as the job result so the server's
- *      `Job.waitUntilFinished` resolves with our payload
- *   3. unsupported actions resolve to `{ success: false, error }` rather than
- *      throwing; throwing would mark the job FAILED and leak retry semantics
- *      we don't want for capability errors
+ * Why one consumer instead of one-per-platform: the `engagement_automation_action`
+ * BullMQ queue is shared, and BullMQ does not support routing by job payload
+ * (a job is consumed by whichever worker grabs it first). Splitting consumers
+ * would risk a douyin job being claimed by the xhs consumer and returned
+ * "unsupported platform" instead of being run.
  *
- * Concurrency is intentionally low (2). Per-account pacing is enforced by the
- * BrowserPoolService — we'd rather queue than thrash a single account.
+ * Concurrency stays at 2 to keep memory + Chromium pressure bounded; per-account
+ * pacing is enforced by the per-platform `BrowserPoolService`.
  */
 @QueueProcessor(QueueName.EngagementAutomationAction, {
   concurrency: 2,
   stalledInterval: 30_000,
   maxStalledCount: 1,
 })
-export class XhsAutomationConsumer extends WorkerHost {
-  private readonly logger = new Logger(XhsAutomationConsumer.name)
+export class AutomationDispatcherConsumer extends WorkerHost {
+  private readonly logger = new Logger(AutomationDispatcherConsumer.name)
 
   constructor(
     private readonly xhsService: XhsService,
@@ -46,18 +42,20 @@ export class XhsAutomationConsumer extends WorkerHost {
     this.logger.log(
       `automation job ${job.id} platform=${data.platform} action=${data.action} accountId=${data.accountId} target=${truncate(data.target)}`,
     )
-
-    if (data.platform === 'xhs')
-      return this.processXhs(data)
-    if (data.platform === 'douyin')
-      return this.processDouyin(data)
-    return {
-      success: false,
-      error: `unsupported platform '${data.platform}' for automation worker`,
+    switch (data.platform) {
+      case 'xhs':
+        return this.runXhs(data)
+      case 'douyin':
+        return this.runDouyin(data)
+      default:
+        return {
+          success: false,
+          error: `unsupported platform '${data.platform}'`,
+        }
     }
   }
 
-  private async processXhs(data: EngagementAutomationActionData): Promise<ActionResult> {
+  private async runXhs(data: EngagementAutomationActionData): Promise<ActionResult> {
     switch (data.action) {
       case 'like':
         return wrap(await this.xhsService.likeNote(data.accountId, data.target), 'like')
@@ -83,11 +81,11 @@ export class XhsAutomationConsumer extends WorkerHost {
         return wrap(await this.xhsService.search(data.accountId, data.target, limit), 'search')
       }
       default:
-        return { success: false, error: `unsupported action '${data.action}' on xhs` }
+        return { success: false, error: `xhs: unsupported action '${data.action}'` }
     }
   }
 
-  private async processDouyin(data: EngagementAutomationActionData): Promise<ActionResult> {
+  private async runDouyin(data: EngagementAutomationActionData): Promise<ActionResult> {
     switch (data.action) {
       case 'like':
         return wrap(await this.douyinService.likeVideo(data.accountId, data.target), 'like')
@@ -113,7 +111,7 @@ export class XhsAutomationConsumer extends WorkerHost {
         return wrap(await this.douyinService.search(data.accountId, data.target, limit), 'search')
       }
       default:
-        return { success: false, error: `unsupported action '${data.action}' on douyin` }
+        return { success: false, error: `douyin: unsupported action '${data.action}'` }
     }
   }
 }

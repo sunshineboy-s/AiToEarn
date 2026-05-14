@@ -31,7 +31,7 @@
 
 ### PR-2A:海外平台
 - [x] **T2.1** YoutubeProvider.likePost/unlikePost(`videos.rate`)— 已在 Phase 1 一并完成
-- [ ] **T2.2** XEngagementProvider(twitter)
+- [x] **T2.2** XEngagementProvider(twitter):like/unlike/follow/comment(=reply via tweet)
 - [ ] **T2.3** PinterestEngagementProvider
 - [ ] **T2.4** LinkedinEngagementProvider
 - [ ] **T2.5** TiktokEngagementProvider
@@ -111,3 +111,4 @@
 
 - **2026-05-14**:Phase 3B PoC 落地、5 个 review 阻断项修复
 - **2026-05-15**:**Phase 0 + 1 + 3A + 4 + 5 + 6 全部落地**;build 通过;`xhs` 走 automation engine 的 like/unlike/favorite/unfavorite/follow/unfollow/comment/reply/search 全链路打通(等真机风控测)
+- **2026-05-15(2)**:Twitter/X engagement provider 落地(T2.2);docker-compose 加入 `aitoearn-automation` 服务;DOCKER_DEPLOYMENT 中英文增加 Engage 自动化服务章节
