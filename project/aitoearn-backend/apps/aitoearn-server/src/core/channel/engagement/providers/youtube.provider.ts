@@ -4,7 +4,7 @@ import { GaxiosResponse } from 'gaxios'
 import { youtube_v3 } from 'googleapis'
 import { YoutubeService } from '../../platforms/youtube/youtube.service'
 import { KeysetPagination, OffsetPagination } from '../engagement.dto'
-import { EngagementComment, EngagementProvider, FetchPostCommentsResponse, PublishCommentResponse } from '../engagement.interface'
+import { ActionResult, EngagementCapability, EngagementComment, EngagementNotSupportedError, EngagementProvider, FetchPostCommentsResponse, PublishCommentResponse } from '../engagement.interface'
 
 function isGaxiosResponse<T>(value: unknown): value is GaxiosResponse<T> {
   return value !== null && typeof value === 'object' && 'data' in value
@@ -12,6 +12,20 @@ function isGaxiosResponse<T>(value: unknown): value is GaxiosResponse<T> {
 
 @Injectable()
 export class YoutubeEngagementProvider implements EngagementProvider {
+  public readonly platform = 'youtube'
+  public readonly capability: EngagementCapability = {
+    like: true,
+    unlike: true,
+    favorite: false,
+    unfavorite: false,
+    follow: false,
+    unfollow: false,
+    comment: true,
+    reply: true,
+    fetchUserPosts: true,
+    search: false,
+    engine: 'api',
+  }
   private readonly logger = new Logger(YoutubeEngagementProvider.name)
   constructor(
     private readonly youtubeService: YoutubeService,
@@ -174,5 +188,32 @@ export class YoutubeEngagementProvider implements EngagementProvider {
 
   async replyToComment(accountId: string, commentId: string, message: string): Promise<PublishCommentResponse> {
     return this.publishYoutubeComment(accountId, commentId, message)
+  }
+
+  async likePost(accountId: string, postId: string): Promise<ActionResult> {
+    const result = await this.youtubeService.setVideosRate(accountId, postId, 'like')
+    return { success: !(result instanceof Error) }
+  }
+
+  async unlikePost(accountId: string, postId: string): Promise<ActionResult> {
+    const result = await this.youtubeService.setVideosRate(accountId, postId, 'none')
+    return { success: !(result instanceof Error) }
+  }
+
+  favoritePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'favorite')
+  }
+
+  unfavoritePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unfavorite')
+  }
+
+  followUser(_accountId: string, _targetUserId: string): Promise<ActionResult> {
+    // YouTube subscriptions.insert requires extra OAuth scopes; not wired yet.
+    throw new EngagementNotSupportedError(this.platform, 'follow')
+  }
+
+  unfollowUser(_accountId: string, _targetUserId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unfollow')
   }
 }

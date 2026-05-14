@@ -4,10 +4,24 @@ import { InstagramMediaType } from '../../libs/instagram/instagram.enum'
 import { IGPostCommentsRequest, InstagramUserPostRequest } from '../../libs/instagram/instagram.interfaces'
 import { InstagramService } from '../../platforms/meta/instagram.service'
 import { KeysetPagination, OffsetPagination } from '../engagement.dto'
-import { EngagementComment, EngagementProvider, FetchPostCommentsResponse, PublishCommentResponse } from '../engagement.interface'
+import { ActionResult, EngagementCapability, EngagementComment, EngagementNotSupportedError, EngagementProvider, FetchPostCommentsResponse, PublishCommentResponse } from '../engagement.interface'
 
 @Injectable()
 export class InstagramEngagementProvider implements EngagementProvider {
+  public readonly platform = 'instagram'
+  public readonly capability: EngagementCapability = {
+    like: false,
+    unlike: false,
+    favorite: false,
+    unfavorite: false,
+    follow: false,
+    unfollow: false,
+    comment: true,
+    reply: true,
+    fetchUserPosts: true,
+    search: false,
+    engine: 'api',
+  }
   constructor(
     private readonly instagramService: InstagramService,
   ) { }
@@ -197,5 +211,30 @@ export class InstagramEngagementProvider implements EngagementProvider {
       result.error = ''
     }
     return result
+  }
+
+  likePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    // Instagram Graph API does not expose a public like endpoint.
+    throw new EngagementNotSupportedError(this.platform, 'like')
+  }
+
+  unlikePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unlike')
+  }
+
+  favoritePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'favorite')
+  }
+
+  unfavoritePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unfavorite')
+  }
+
+  followUser(_accountId: string, _targetUserId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'follow')
+  }
+
+  unfollowUser(_accountId: string, _targetUserId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unfollow')
   }
 }

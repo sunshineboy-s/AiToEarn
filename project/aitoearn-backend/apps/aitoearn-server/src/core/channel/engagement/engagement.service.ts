@@ -7,8 +7,8 @@ import { RelayAccountException } from '../../relay/relay-account.exception'
 import { ChannelAccountService } from '../platforms/channel-account.service'
 import { FacebookService } from '../platforms/meta/facebook.service'
 import { ReplyToCommentAnswer } from './ai.dto'
-import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
-import { EngagementProvider, PublishCommentResponse } from './engagement.interface'
+import { AIGenCommentDto, FavoritePostRequest, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, FollowUserRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
+import { ActionResult, EngagementCapability, EngagementNotSupportedError, EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
@@ -35,6 +35,18 @@ export class EngagementService {
     this.providerMap.set('youtube', youtubeProvider)
   }
 
+  /**
+   * Snapshot of the platform capability matrix. The frontend calls this on
+   * page load to know which buttons to disable. Adding a new provider simply
+   * inserts another row.
+   */
+  getCapabilities(): Array<EngagementCapability & { platform: string }> {
+    return Array.from(this.providerMap.values()).map(p => ({
+      platform: p.platform,
+      ...p.capability,
+    }))
+  }
+
   private async checkRelayAccount(accountId: string) {
     const account = await this.channelAccountService.getAccountInfo(accountId)
     if (account?.relayAccountRef) {
@@ -45,9 +57,21 @@ export class EngagementService {
   private getProvider(providerKey: string): EngagementProvider {
     const provider = this.providerMap.get(providerKey)
     if (!provider) {
-      throw new Error(`Engagement provider for ${providerKey} not found`)
+      throw new AppException(ResponseCode.PlatformNotSupported, { platform: providerKey })
     }
     return provider
+  }
+
+  private translateNotSupported<T>(action: string, fn: () => Promise<T>): Promise<T> {
+    return fn().catch((err: unknown) => {
+      if (err instanceof EngagementNotSupportedError) {
+        throw new AppException(
+          ResponseCode.EngagementCapabilityUnavailable,
+          { action: err.action || action, platform: err.platform },
+        )
+      }
+      throw err
+    })
   }
 
   async fetchUserPosts(data: FetchPostsRequest) {
@@ -105,14 +129,40 @@ export class EngagementService {
     return provider.fetchUserPosts(data.accountId, pagination)
   }
 
-  async likePost(data: LikePostRequest): Promise<{ success: boolean }> {
+  async likePost(data: LikePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
-    return this.facebookService.likePost(data.accountId, data.postId)
+    const provider = this.getProvider(data.platform)
+    return this.translateNotSupported('like', () => provider.likePost(data.accountId, data.postId))
   }
 
-  async unlikePost(data: LikePostRequest): Promise<{ success: boolean }> {
+  async unlikePost(data: LikePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
-    return this.facebookService.unlikePost(data.accountId, data.postId)
+    const provider = this.getProvider(data.platform)
+    return this.translateNotSupported('unlike', () => provider.unlikePost(data.accountId, data.postId))
+  }
+
+  async favoritePost(data: FavoritePostRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    const provider = this.getProvider(data.platform)
+    return this.translateNotSupported('favorite', () => provider.favoritePost(data.accountId, data.postId))
+  }
+
+  async unfavoritePost(data: FavoritePostRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    const provider = this.getProvider(data.platform)
+    return this.translateNotSupported('unfavorite', () => provider.unfavoritePost(data.accountId, data.postId))
+  }
+
+  async followUser(data: FollowUserRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    const provider = this.getProvider(data.platform)
+    return this.translateNotSupported('follow', () => provider.followUser(data.accountId, data.targetUserId))
+  }
+
+  async unfollowUser(data: FollowUserRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    const provider = this.getProvider(data.platform)
+    return this.translateNotSupported('unfollow', () => provider.unfollowUser(data.accountId, data.targetUserId))
   }
 
   async batchGenReplyContent(data: AIGenCommentDto): Promise<Record<string, string>> {

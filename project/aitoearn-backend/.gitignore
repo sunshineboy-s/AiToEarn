@@ -54,3 +54,5 @@ local.config.js
 docker-compose.yml
 nginx/
 vitest.config.*.timestamp*
+# Node 24 compile cache
+node-compile-cache/
