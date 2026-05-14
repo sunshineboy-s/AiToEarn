@@ -88,6 +88,15 @@ export enum ResponseCode {
   InvalidWorkLink = 15036,
   WorkNotBelongToAccount = 15037,
 
+  // 15040-15049: engagement (built-in engine)
+  EngagementCapabilityUnavailable = 15040,
+  EngagementRateLimited = 15041,
+  EngagementCircuitBreakerOpen = 15042,
+  EngagementAutomationUnavailable = 15043,
+  EngagementCookieMissing = 15044,
+  BrandMonitorNotFound = 15045,
+  EngagementMiningHitNotFound = 15046,
+
   // 15100-15199: short-link（短链接）
   ShortLinkNotFound = 15100,
 

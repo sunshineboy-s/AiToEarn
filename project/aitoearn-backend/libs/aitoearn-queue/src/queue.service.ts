@@ -1,9 +1,12 @@
 import type { Job, JobsOptions, Queue } from 'bullmq'
 import type {
   AiImageData,
+  BrandMonitorScanData,
   CreditsPurchaseData,
   CreditsRefundData,
   DraftGenerationData,
+  EngagementAutomationActionData,
+  EngagementMiningJobData,
   EngagementReplyToCommentData,
   EngagementTaskDistributionData,
   NotificationData,
@@ -35,6 +38,12 @@ export class QueueService {
     private engagementTaskDistributionQueue: Queue,
     @InjectQueue(QueueName.EngagementReplyToComment)
     private engagementReplyToCommentQueue: Queue,
+    @InjectQueue(QueueName.EngagementMining)
+    private engagementMiningQueue: Queue,
+    @InjectQueue(QueueName.EngagementAutomationAction)
+    private engagementAutomationActionQueue: Queue,
+    @InjectQueue(QueueName.BrandMonitorScan)
+    private brandMonitorScanQueue: Queue,
     @InjectQueue(QueueName.DumpSocialMediaAvatar)
     private dumpSocialMediaAvatarQueue: Queue,
     @InjectQueue(QueueName.UpdatePublishedPost)
@@ -103,6 +112,65 @@ export class QueueService {
       ...this.defaultOptions,
       ...options,
     })
+  }
+
+  async addEngagementMiningJob(data: EngagementMiningJobData, options?: JobsOptions) {
+    return await this.engagementMiningQueue.add('classify', data, {
+      ...this.defaultOptions,
+      ...options,
+    })
+  }
+
+  async addEngagementAutomationActionJob(
+    data: EngagementAutomationActionData,
+    options?: JobsOptions,
+  ): Promise<Job<EngagementAutomationActionData>> {
+    return await this.engagementAutomationActionQueue.add(
+      `${data.platform}:${data.action}`,
+      data,
+      {
+        ...this.defaultOptions,
+        jobId: data.correlationId,
+        ...options,
+      },
+    )
+  }
+
+  async waitForEngagementAutomationActionResult<T = unknown>(
+    correlationId: string,
+    timeoutMs = 60_000,
+  ): Promise<T> {
+    const job = await this.engagementAutomationActionQueue.getJob(correlationId)
+    if (!job)
+      throw new Error(`automation action job ${correlationId} not found`)
+    return (await job.waitUntilFinished(undefined as never, timeoutMs)) as T
+  }
+
+  async addBrandMonitorScanJob(
+    data: BrandMonitorScanData,
+    options?: JobsOptions,
+  ) {
+    return await this.brandMonitorScanQueue.add('scan', data, {
+      ...this.defaultOptions,
+      ...options,
+    })
+  }
+
+  async addBrandMonitorScanRepeatable(
+    data: BrandMonitorScanData,
+    everyMs: number,
+  ) {
+    // BullMQ repeat jobs are deduped by `jobId + repeat opts` — using
+    // `monitor:<id>` keeps a single job per monitor regardless of restarts.
+    return await this.brandMonitorScanQueue.add('scan', data, {
+      ...this.defaultOptions,
+      jobId: `monitor:${data.monitorId}`,
+      repeat: { every: everyMs },
+    })
+  }
+
+  async removeBrandMonitorScanRepeatable(monitorId: string, everyMs: number) {
+    await this.brandMonitorScanQueue.removeRepeatable('scan', { every: everyMs }, `monitor:${monitorId}`)
   }
 
   async addDumpSocialMediaAvatarJob(data: { accountId: string }, options?: JobsOptions) {
