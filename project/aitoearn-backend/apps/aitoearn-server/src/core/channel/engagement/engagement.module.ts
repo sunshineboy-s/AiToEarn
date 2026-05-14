@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common'
 import { ChannelSharedModule } from '../platforms/channel-shared.module'
 import { MetaModule } from '../platforms/meta/meta.module'
 import { YoutubeModule } from '../platforms/youtube/youtube.module'
+import { EngagementAutomationRpcService } from './automation/automation-rpc.service'
+import { XhsAutomationProvider } from './automation/xhs-automation.provider'
 import { BrandMonitorScanConsumer } from './brand/brand-monitor.consumer'
 import { BrandMonitorController } from './brand/brand-monitor.controller'
 import { BrandMonitorService } from './brand/brand-monitor.service'
@@ -35,6 +37,8 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     InstagramEngagementProvider,
     ThreadsEngagementProvider,
     YoutubeEngagementProvider,
+    XhsAutomationProvider,
+    EngagementAutomationRpcService,
     EngagementService,
     EngagementRecordService,
     EngagementMiningService,
@@ -50,6 +54,8 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     InstagramEngagementProvider,
     ThreadsEngagementProvider,
     YoutubeEngagementProvider,
+    XhsAutomationProvider,
+    EngagementAutomationRpcService,
     EngagementService,
     EngagementRecordService,
     EngagementMiningService,

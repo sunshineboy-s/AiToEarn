@@ -1,4 +1,5 @@
 import { aitoearnAuthConfigSchema } from '@yikart/aitoearn-auth'
+import { queueConfigSchema } from '@yikart/aitoearn-queue'
 import { baseConfig, createZodDto, selectConfig } from '@yikart/common'
 import z from 'zod'
 
@@ -24,8 +25,15 @@ export const appConfigSchema = z.object({
   auth: aitoearnAuthConfigSchema,
   browser: browserConfigSchema,
   cookieVault: cookieVaultConfigSchema,
+  /**
+   * Optional: when present, enables the BullMQ consumer that picks up
+   * `engagement_automation_action` jobs published by aitoearn-server. When
+   * omitted the worker only exposes the HTTP API surface (PoC mode).
+   */
+  queue: queueConfigSchema.optional(),
 })
 
 export class AppConfig extends createZodDto(appConfigSchema) {}
 
 export const config = selectConfig(AppConfig)
+

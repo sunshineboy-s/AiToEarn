@@ -57,9 +57,16 @@ module.exports = {
     maxDelayMs: Number(AUTOMATION_MAX_DELAY_MS) || 2400,
   },
 
-  cookieVault: {
-    // PoC: load cookies from a JSON file or env JSON. AES/KMS comes in M1+.
-    cookieFile: AUTOMATION_COOKIE_FILE || '',
-    cookieJson: AUTOMATION_COOKIE_JSON || '',
-  },
+  // BullMQ queue (optional — enable when piping jobs from aitoearn-server)
+  queue: process.env.REDIS_HOST
+    ? {
+        redis: {
+          host: process.env.REDIS_HOST,
+          port: Number(process.env.REDIS_PORT) || 6379,
+          username: process.env.REDIS_USERNAME || 'default',
+          password: process.env.REDIS_PASSWORD,
+        },
+        prefix: process.env.AUTOMATION_BULL_PREFIX || '{bull}',
+      }
+    : undefined,
 }

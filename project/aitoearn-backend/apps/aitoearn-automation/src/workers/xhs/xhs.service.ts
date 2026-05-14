@@ -60,6 +60,138 @@ export class XhsService {
     })
   }
 
+  /**
+   * Inverse of {@link likeNote}. The XHS like button toggles, so we click only
+   * if the note is currently liked. Idempotent — safe to retry.
+   */
+  async unlikeNote(accountId: string, noteUrl: string): Promise<ActionResult<XhsLikeData>> {
+    return this.run<XhsLikeData>(accountId, async (page) => {
+      const noteId = this.extractNoteId(noteUrl)
+      await page.goto(noteUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
+      await this.browserPool.humanDelay()
+
+      const likeButton = await this.firstVisible(page, XhsSelectors.note.likeButton)
+      if (!likeButton)
+        return { success: false, error: 'like button not found (selector drift?)' }
+
+      const wasLiked = await likeButton.evaluate(
+        (el, klass) => (el as Element).classList.contains(klass),
+        XhsSelectors.note.likedClass,
+      )
+      if (!wasLiked) {
+        return {
+          success: true,
+          data: { noteId, alreadyLiked: false, likeCount: await this.readFirstText(page, XhsSelectors.note.likeCount) },
+        }
+      }
+      await likeButton.click({ delay: 60 })
+      await this.browserPool.humanDelay()
+      return {
+        success: true,
+        data: { noteId, alreadyLiked: false, likeCount: await this.readFirstText(page, XhsSelectors.note.likeCount) },
+      }
+    })
+  }
+
+  /**
+   * Favourite (collect) — same toggle pattern as like. Selector resolution
+   * lives in xhs.selectors.ts so DOM drift is grep-able.
+   */
+  async favoriteNote(accountId: string, noteUrl: string): Promise<ActionResult<XhsLikeData>> {
+    return this.run<XhsLikeData>(accountId, async (page) => {
+      const noteId = this.extractNoteId(noteUrl)
+      await page.goto(noteUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
+      await this.browserPool.humanDelay()
+
+      const fav = await this.firstVisible(page, XhsSelectors.note.favoriteButton)
+      if (!fav)
+        return { success: false, error: 'favorite button not found (selector drift?)' }
+
+      const already = await fav.evaluate(
+        (el, klass) => (el as Element).classList.contains(klass),
+        XhsSelectors.note.favoritedClass,
+      )
+      if (!already) {
+        await fav.click({ delay: 70 })
+        await this.browserPool.humanDelay()
+      }
+      return { success: true, data: { noteId, alreadyLiked: already } }
+    })
+  }
+
+  async unfavoriteNote(accountId: string, noteUrl: string): Promise<ActionResult<XhsLikeData>> {
+    return this.run<XhsLikeData>(accountId, async (page) => {
+      const noteId = this.extractNoteId(noteUrl)
+      await page.goto(noteUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
+      await this.browserPool.humanDelay()
+
+      const fav = await this.firstVisible(page, XhsSelectors.note.favoriteButton)
+      if (!fav)
+        return { success: false, error: 'favorite button not found' }
+
+      const already = await fav.evaluate(
+        (el, klass) => (el as Element).classList.contains(klass),
+        XhsSelectors.note.favoritedClass,
+      )
+      if (already) {
+        await fav.click({ delay: 60 })
+        await this.browserPool.humanDelay()
+      }
+      return { success: true, data: { noteId, alreadyLiked: false } }
+    })
+  }
+
+  /**
+   * Follow a user. `target` accepts either a profile URL or a userId; we
+   * normalise to the canonical profile URL and click the Follow CTA.
+   */
+  async followUser(accountId: string, target: string): Promise<ActionResult<{ targetUserId: string }>> {
+    return this.run<{ targetUserId: string }>(accountId, async (page) => {
+      const profileUrl = this.toProfileUrl(target)
+      await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
+      await this.browserPool.humanDelay()
+
+      const button = await this.firstVisible(page, XhsSelectors.profile.followButton)
+      if (!button)
+        return { success: false, error: 'follow button not found' }
+
+      const text = (await button.textContent().catch(() => null))?.trim() ?? ''
+      const alreadyFollowing = /\u5df2\u5173\u6ce8|following/i.test(text)
+      if (alreadyFollowing)
+        return { success: true, data: { targetUserId: target } }
+
+      await button.click({ delay: 80 })
+      await this.browserPool.humanDelay()
+      return { success: true, data: { targetUserId: target } }
+    })
+  }
+
+  async unfollowUser(accountId: string, target: string): Promise<ActionResult<{ targetUserId: string }>> {
+    return this.run<{ targetUserId: string }>(accountId, async (page) => {
+      const profileUrl = this.toProfileUrl(target)
+      await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: ACTION_TIMEOUT_MS })
+      await this.browserPool.humanDelay()
+
+      const button = await this.firstVisible(page, XhsSelectors.profile.followButton)
+      if (!button)
+        return { success: false, error: 'follow button not found' }
+
+      const text = (await button.textContent().catch(() => null))?.trim() ?? ''
+      const alreadyFollowing = /\u5df2\u5173\u6ce8|following/i.test(text)
+      if (!alreadyFollowing)
+        return { success: true, data: { targetUserId: target } }
+
+      await button.click({ delay: 60 })
+      await this.browserPool.humanDelay()
+      // XHS shows a confirm dialog for unfollow — best-effort dismiss
+      const confirm = await this.firstVisible(page, XhsSelectors.profile.unfollowConfirm)
+      if (confirm)
+        await confirm.click({ delay: 60 })
+      await this.browserPool.humanDelay()
+      return { success: true, data: { targetUserId: target } }
+    })
+  }
+
   async replyToNote(
     accountId: string,
     noteUrl: string,
@@ -201,5 +333,17 @@ export class XhsService {
   private extractNoteId(noteUrl: string): string {
     const m = noteUrl.match(/\/(?:explore|discovery\/item|search_result)\/([0-9a-f]{20,})/i)
     return m?.[1] ?? noteUrl
+  }
+
+  /**
+   * Accept a profile URL, a `user/<id>` path, or a bare userId. The xhs web
+   * profile lives at `/user/profile/<id>`.
+   */
+  private toProfileUrl(target: string): string {
+    if (/^https?:\/\//i.test(target))
+      return target
+    const m = target.match(/([0-9a-f]{8,})$/i)
+    const id = m?.[1] ?? target
+    return `https://www.xiaohongshu.com/user/profile/${id}`
   }
 }

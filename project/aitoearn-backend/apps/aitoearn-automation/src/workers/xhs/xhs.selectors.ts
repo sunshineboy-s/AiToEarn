@@ -30,6 +30,13 @@ export const XhsSelectors = {
       '.interact-info .like-wrapper .count',
     ],
     likedClass: 'liked',
+    favoriteButton: [
+      '.engage-bar .collect-wrapper',
+      '.interact-info .collect-wrapper',
+      '[data-test-id="collect-btn"]',
+      'button[aria-label*="\u6536\u85cf"]',
+    ],
+    favoritedClass: 'collected',
     commentInput: [
       '#content-textarea',
       'textarea[placeholder*="\u8bc4\u8bba"]',
@@ -51,5 +58,22 @@ export const XhsSelectors = {
     itemAuthor: '.author-wrapper .name, .name, .user-name',
     itemLike: '.like-wrapper .count, .count',
     itemThumb: 'img',
+  },
+
+  // Profile page
+  profile: {
+    followButton: [
+      '.follow-button',
+      '[data-test-id="follow-btn"]',
+      'button:has-text("\u5173\u6ce8")', // "guanzhu" / Follow
+      'button:has-text("\u5df2\u5173\u6ce8")', // already following
+      'button:has-text("Follow")',
+      'button:has-text("Following")',
+    ],
+    unfollowConfirm: [
+      'button:has-text("\u786e\u5b9a")', // confirm
+      'button:has-text("\u4e0d\u518d\u5173\u6ce8")', // unfollow
+      'button.confirm-btn',
+    ],
   },
 } as const

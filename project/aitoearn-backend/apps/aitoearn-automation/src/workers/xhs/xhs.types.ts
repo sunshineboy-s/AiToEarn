@@ -2,6 +2,8 @@ export interface ActionResult<T = unknown> {
   success: boolean
   data?: T
   error?: string
+  /** Provider-side identifier when relevant. */
+  providerId?: string
 }
 
 export interface XhsLikeData {

@@ -7,6 +7,7 @@ import { RelayAccountException } from '../../relay/relay-account.exception'
 import { ChannelAccountService } from '../platforms/channel-account.service'
 import { FacebookService } from '../platforms/meta/facebook.service'
 import { ReplyToCommentAnswer } from './ai.dto'
+import { XhsAutomationProvider } from './automation/xhs-automation.provider'
 import { AIGenCommentDto, FavoritePostRequest, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, FollowUserRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
 import { ActionResult, EngagementCapability, EngagementNotSupportedError, EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
@@ -24,6 +25,7 @@ export class EngagementService {
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
+    xhsAutomationProvider: XhsAutomationProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly queueService: QueueService,
@@ -35,6 +37,7 @@ export class EngagementService {
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('xhs', xhsAutomationProvider)
   }
 
   /**
