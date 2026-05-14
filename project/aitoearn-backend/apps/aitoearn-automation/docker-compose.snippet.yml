@@ -1,0 +1,39 @@
+# Drop-in addition for the workspace-root docker-compose.yml.
+# Copy the `aitoearn-automation:` block under `services:` and the volume entry
+# under the top-level `volumes:` key.
+
+services:
+  aitoearn-automation:
+    image: aitoearn/automation:latest
+    build:
+      context: ./project/aitoearn-backend
+      dockerfile: apps/aitoearn-automation/Dockerfile
+      args:
+        APP_NAME: aitoearn-automation
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      NODE_ENV: production
+      AUTOMATION_PORT: 3010
+      AUTOMATION_INTERNAL_TOKEN: ${AUTOMATION_INTERNAL_TOKEN:-change-me}
+
+      # Browser
+      AUTOMATION_HEADLESS: "true"
+      AUTOMATION_BROWSER_POOL_SIZE: "3"
+      # AUTOMATION_PROXY: http://user:pass@proxy.example.com:8080
+      # AUTOMATION_USER_AGENT: "Mozilla/5.0 ..."
+
+      # Cookie source — pick one
+      AUTOMATION_COOKIE_FILE: /run/secrets/xhs-cookies.json
+      # AUTOMATION_COOKIE_JSON: '{"xhs:default":[{"name":"web_session", ...}]}'
+
+      AUTOMATION_MIN_DELAY_MS: "800"
+      AUTOMATION_MAX_DELAY_MS: "2400"
+    volumes:
+      - automation-cookies:/run/secrets:ro
+    # Playwright sometimes needs a larger /dev/shm on Linux to avoid Chromium crashes.
+    shm_size: "1gb"
+
+volumes:
+  automation-cookies:

@@ -1,0 +1,5 @@
+config/local.config.js
+config/dev.config.js
+config/prod.config.js
+.cookies/
+*.log
