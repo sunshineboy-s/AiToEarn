@@ -343,6 +343,15 @@ ElectronプロジェクトはAiToEarnのデスクトップクライアントを�
 
 ## 推奨
 
+> 🎯 **おすすめの組み合わせ**：[Anything → NotebookLM](https://github.com/joeseesun/qiaomu-anything-to-notebooklm)（15+ 種類のコンテンツソース解析 / 300+ ペイウォール回避 / ポッドキャスト・スライド・マインドマップ・クイズへ変換）を AiToEarn Create の **入力側** として活用。Claude Code / Cursor で 2 つを同時に有効化すれば、「読む → 二次創作 → 配信」が一文で完結します：
+>
+> ```text
+> > この WSJ 記事をマインドマップにして、X と LinkedIn に投稿して
+> 1) Anything → NotebookLM：ペイウォール回避 → 本文取得 → マインドマップ生成
+> 2) AiToEarn：X と LinkedIn にワンクリック投稿 ✅
+> ```
+
+- [Anything → NotebookLM](https://github.com/joeseesun/qiaomu-anything-to-notebooklm) — マルチソース取得（WeChat / 小宇宙 / YouTube / ペイウォール記事 / PDF / EPUB...）＋ ポッドキャスト / スライド / マインドマップ / クイズへワンクリック変換
 - [MuseTalk](https://github.com/TMElyralab/MuseTalk)
 - [video_spider](https://github.com/5ime/video_spider)
 - [CosyVoice](https://github.com/FunAudioLLM/CosyVoice?tab=readme-ov-file)
