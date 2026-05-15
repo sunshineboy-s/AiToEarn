@@ -639,11 +639,13 @@ export class TiktokService extends PlatformBaseService {
     await this.ensureLocalAccount(accountId)
     const tokenInfo = await this.getOAuth2Credential(accountId)
     if (!tokenInfo) {
-      this.updateAccountStatus(accountId, 0)
+      await this.safeUpdateAccountStatus(accountId, 0)
       return 0
     }
-    const status = tokenInfo.refresh_expires_in > getCurrentTimestamp() ? 1 : 0
-    this.updateAccountStatus(accountId, status)
+    // TikTok：以 refresh_expires_in（refresh token 时间戳）为整体可用性判据。
+    // Access token 过期时上层会用 refresh token 自动刷；refresh token 没了才视为不可用。
+    const status = this.isTokenExpired(tokenInfo.refresh_expires_in) ? 0 : 1
+    await this.safeUpdateAccountStatus(accountId, status)
     return status
   }
 
