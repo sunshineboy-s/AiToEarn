@@ -7,7 +7,7 @@ import { DataCubeBase } from './data.base'
 
 @Injectable()
 export class KwaiDataService extends DataCubeBase {
-  private readonly logger = new Logger(KwaiService.name)
+  private readonly logger = new Logger(KwaiDataService.name)
   constructor(
     readonly kwaiService: KwaiService,
     private readonly accountRepository: AccountRepository,
@@ -15,7 +15,7 @@ export class KwaiDataService extends DataCubeBase {
     super()
   }
 
-  @OnEvent(`account.create.${AccountType.Xhs}`)
+  @OnEvent(`account.create.${AccountType.KWAI}`)
   async accountPortraitReport(accountId: string) {
     const res = await this.getAccountDataCube(accountId)
     await this.accountRepository.updateAccountStatistics(accountId, {
