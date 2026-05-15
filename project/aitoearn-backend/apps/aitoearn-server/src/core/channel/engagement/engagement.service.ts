@@ -10,6 +10,7 @@ import { ReplyToCommentAnswer } from './ai.dto'
 import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
 import { EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
+import { BilibiliEngagementProvider } from './providers/bilibili.provider'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
@@ -19,6 +20,7 @@ import { YoutubeEngagementProvider } from './providers/youtube.provider'
 export class EngagementService {
   private readonly providerMap = new Map<string, EngagementProvider>()
   constructor(
+    bilibiliProvider: BilibiliEngagementProvider,
     facebookProvider: FacebookEngagementProvider,
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
@@ -29,6 +31,7 @@ export class EngagementService {
     private readonly facebookService: FacebookService,
     private readonly channelAccountService: ChannelAccountService,
   ) {
+    this.providerMap.set('bilibili', bilibiliProvider)
     this.providerMap.set('facebook', facebookProvider)
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
