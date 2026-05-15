@@ -15,6 +15,7 @@ export enum AccountType {
   PINTEREST = 'pinterest',
   LINKEDIN = 'linkedin', // linkedin
   GOOGLE_BUSINESS = 'google_business', // Google Business Profile
+  XIANYU = 'xianyu', // 闲鱼（咸鱼）
 }
 
 export enum AccountStatus {

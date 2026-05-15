@@ -87,6 +87,7 @@ export enum ResponseCode {
   PublishTaskInvalid = 15035,
   InvalidWorkLink = 15036,
   WorkNotBelongToAccount = 15037,
+  XianyuOAuthUnsupported = 15038,
 
   // 15100-15199: short-link（短链接）
   ShortLinkNotFound = 15100,

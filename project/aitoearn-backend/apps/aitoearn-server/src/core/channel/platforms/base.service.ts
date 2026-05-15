@@ -91,4 +91,40 @@ export abstract class PlatformBaseService {
   protected async updateAccountStatus(accountId: string, status: number) {
     await this.accountRepository.updateAccountStatus(accountId, status)
   }
+
+  /**
+   * 安静地（不抛异常地）更新账号状态。用于 getAccessTokenStatus 这类
+   * 只读 API：DB 写失败不应让"读 token 状态"也失败。
+   *
+   * Async 调用方仍然要 await 此方法，而不是 fire-and-forget —— 否则会
+   * 在底层抛出时变成 unhandled rejection（NestJS 默认会 crash 进程）。
+   */
+  protected async safeUpdateAccountStatus(accountId: string, status: number): Promise<void> {
+    try {
+      await this.accountRepository.updateAccountStatus(accountId, status)
+    }
+    catch (err) {
+      this.logger.warn(
+        `[${this.platform}] updateAccountStatus(accountId=${accountId}, status=${status}) failed: ${(err as Error).message}`,
+      )
+    }
+  }
+
+  /**
+   * 判断 OAuth Token 是否已过期或即将过期。
+   *
+   * - `expiresAt` 必须是秒级 Unix 时间戳（与 `getCurrentTimestamp()` 同基准）。
+   * - `marginSec` 是预过期窗口：剩余有效时间 <= margin 时也视为过期，
+   *   触发上层刷新流程，避免客户端拿到一个再过几秒就被服务端拒掉的 token。
+   *
+   * 默认 60 秒 margin，与 Pinterest 的 `TOKEN_REFRESH_MARGIN` 一致。
+   */
+  protected isTokenExpired(expiresAt: number | undefined | null, marginSec = 60): boolean {
+    if (!expiresAt || expiresAt <= 0) {
+      return true
+    }
+    // 复用 common/utils/time.util 里的 getCurrentTimestamp 时机，由调用方传入更易测试
+    const now = Math.floor(Date.now() / 1000)
+    return expiresAt - now <= marginSec
+  }
 }

@@ -108,12 +108,11 @@ export class DouyinService extends PlatformBaseService {
     await this.ensureLocalAccount(accountId)
     const tokenInfo = await this.getOAuth2Credential(accountId)
     if (!tokenInfo) {
-      this.updateAccountStatus(accountId, 0)
+      await this.safeUpdateAccountStatus(accountId, 0)
       return 0
     }
-    const now = getCurrentTimestamp()
-    const status = tokenInfo.expires_in > now ? 1 : 0
-    this.updateAccountStatus(accountId, status)
+    const status = this.isTokenExpired(tokenInfo.expires_in) ? 0 : 1
+    await this.safeUpdateAccountStatus(accountId, status)
     return status
   }
 
