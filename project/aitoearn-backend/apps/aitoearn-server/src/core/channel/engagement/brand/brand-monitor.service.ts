@@ -9,7 +9,13 @@ import {
   BrandMonitorRepository,
   BrandMonitorStatus,
 } from '@yikart/channel-db'
-import { AppException, ResponseCode } from '@yikart/common'
+import {
+  AppException,
+  NotificationMessageKey,
+  NotificationType,
+  ResponseCode,
+  UserType,
+} from '@yikart/common'
 import {
   CreateBrandMonitorRequest,
   ListMentionsRequest,
@@ -167,13 +173,32 @@ export class BrandMonitorService {
         continue
       created += 1
       if (urgency === BrandMentionUrgency.HIGH && monitor.notificationChannels?.inApp !== false) {
-        // TODO(brand-monitor): the QueueService.NotificationData union does not
-        // model brand_mention yet — wire this through the notification module
-        // in a follow-up PR. For now we mark the row notified and log so the
-        // operator can build a webhook off the mention API instead.
-        this.logger.warn(
-          `[brand-monitor] HIGH urgency mention captured for monitor=${monitor.id} platform=${item.platform} postId=${item.postId}`,
-        )
+        // Producer side of the brand_mention notification flow. The
+        // notification module renders this through NotificationMessageKey.
+        // BrandMentionHigh — see libs/common/i18n/notification-messages.ts.
+        const snippet = item.content.slice(0, 280)
+        await this.queueService.addNotificationJob({
+          userId: monitor.userId,
+          userType: UserType.User,
+          relatedId: result.mention.id,
+          type: NotificationType.BrandMention,
+          messageKey: NotificationMessageKey.BrandMentionHigh,
+          vars: {
+            monitor: monitor.name,
+            platform: item.platform,
+            snippet,
+          },
+          data: {
+            monitorId: monitor.id,
+            monitorName: monitor.name,
+            mentionId: result.mention.id,
+            platform: item.platform,
+            postId: item.postId,
+            postUrl: item.postUrl ?? '',
+            urgency,
+            snippet,
+          },
+        })
         await this.mentionRepo.markNotified(result.mention.id)
       }
     }

@@ -57,6 +57,15 @@ module.exports = {
     maxDelayMs: Number(AUTOMATION_MAX_DELAY_MS) || 2400,
   },
 
+  cookieVault: {
+    // PoC: cookieFile / cookieJson load plaintext at boot. When
+    // AUTOMATION_COOKIE_SECRET is set, entries that look like AES-256-GCM
+    // envelopes ({ alg, iv, ciphertext, tag }) are decrypted on read.
+    cookieFile: AUTOMATION_COOKIE_FILE || '',
+    cookieJson: AUTOMATION_COOKIE_JSON || '',
+    encryptionSecret: process.env.AUTOMATION_COOKIE_SECRET || '',
+  },
+
   // BullMQ queue (optional — enable when piping jobs from aitoearn-server)
   queue: process.env.REDIS_HOST
     ? {

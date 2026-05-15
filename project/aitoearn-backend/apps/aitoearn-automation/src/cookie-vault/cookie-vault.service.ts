@@ -1,4 +1,5 @@
 import type { Cookie } from 'playwright'
+import { createDecipheriv, hkdfSync } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import {
@@ -12,26 +13,63 @@ const PLATFORM_DEFAULT_DOMAIN: Record<string, string> = {
   xhs: '.xiaohongshu.com',
 }
 
+interface AesEnvelope {
+  alg: 'AES-256-GCM'
+  iv: string
+  ciphertext: string
+  tag: string
+}
+
+function isAesEnvelope(value: unknown): value is AesEnvelope {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && (value as { alg?: string }).alg === 'AES-256-GCM'
+    && typeof (value as { iv?: unknown }).iv === 'string'
+    && typeof (value as { ciphertext?: unknown }).ciphertext === 'string'
+    && typeof (value as { tag?: unknown }).tag === 'string',
+  )
+}
+
 /**
- * PoC-grade in-memory cookie store.
+ * Cookie storage with optional AES-256-GCM at-rest decryption.
  *
- * Loads cookies from a JSON file (`AUTOMATION_COOKIE_FILE`) or inline JSON
- * (`AUTOMATION_COOKIE_JSON`) at boot. The Vault hands out Playwright-compatible
- * cookie arrays keyed by `${platform}:${accountId}`.
+ * Loading priority (first non-empty wins):
+ *   1. cookieJson env var
+ *   2. cookieFile path
  *
- * In M1+ we'll swap this for AES-256-GCM at-rest with a KMS-derived key (see
- * design.md §2.2 / FR-? Cookie Vault).
+ * The payload may be either a plain Playwright/Chrome cookie list (PoC mode)
+ * or an AES envelope wrapping that list. When `encryptionSecret` is set we
+ * derive a 32-byte key with HKDF-SHA256 and decrypt the envelope; the
+ * resulting plaintext is parsed as a CookieFilePayload exactly the same way
+ * as a plain payload.
+ *
+ * Production callers can also push entries through {@link setRaw} after
+ * decrypting database-stored EngagementCookieVault rows (channel-db) — the
+ * service does not care where the cleartext came from.
  */
 @Injectable()
 export class CookieVaultService implements OnModuleInit {
   private readonly logger = new Logger(CookieVaultService.name)
   private readonly store = new Map<string, Cookie[]>()
+  private encryptionKey: Buffer | null = null
 
   constructor(
     @Inject(COOKIE_VAULT_CONFIG) private readonly config: CookieVaultModuleConfig,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (this.config.encryptionSecret) {
+      this.encryptionKey = Buffer.from(
+        hkdfSync(
+          'sha256',
+          Buffer.from(this.config.encryptionSecret, 'utf8'),
+          Buffer.alloc(0),
+          Buffer.from('aitoearn:cookie-vault:v1', 'utf8'),
+          32,
+        ),
+      )
+    }
     const payload = await this.loadPayload()
     if (!payload) {
       this.logger.warn(
@@ -59,6 +97,11 @@ export class CookieVaultService implements OnModuleInit {
     )
   }
 
+  /** Direct push of pre-parsed Playwright cookies (e.g. from a DB read). */
+  setRaw(platform: string, accountId: string, cookies: Cookie[]): void {
+    this.store.set(this.keyOf(platform, accountId), cookies)
+  }
+
   list(): Array<{ key: string, count: number }> {
     return Array.from(this.store.entries()).map(([key, cookies]) => ({
       key,
@@ -69,7 +112,7 @@ export class CookieVaultService implements OnModuleInit {
   private async loadPayload(): Promise<CookieFilePayload | null> {
     if (this.config.cookieJson) {
       try {
-        return JSON.parse(this.config.cookieJson) as CookieFilePayload
+        return this.maybeDecrypt(this.config.cookieJson)
       }
       catch (err) {
         this.logger.error(`CookieVault: failed to parse AUTOMATION_COOKIE_JSON: ${(err as Error).message}`)
@@ -79,7 +122,7 @@ export class CookieVaultService implements OnModuleInit {
     if (this.config.cookieFile) {
       try {
         const raw = await readFile(this.config.cookieFile, 'utf8')
-        return JSON.parse(raw) as CookieFilePayload
+        return this.maybeDecrypt(raw)
       }
       catch (err) {
         this.logger.error(
@@ -89,6 +132,26 @@ export class CookieVaultService implements OnModuleInit {
       }
     }
     return null
+  }
+
+  /**
+   * Parse a JSON string and, when it's wrapped in an AES envelope, decrypt it
+   * with the HKDF-derived key. Refuses to read encrypted payloads when no
+   * secret was configured — callers must opt-in deliberately.
+   */
+  private maybeDecrypt(raw: string): CookieFilePayload {
+    const parsed = JSON.parse(raw) as unknown
+    if (!isAesEnvelope(parsed))
+      return parsed as CookieFilePayload
+    if (!this.encryptionKey)
+      throw new Error('encrypted cookie payload but AUTOMATION_COOKIE_SECRET is not set')
+    const iv = Buffer.from(parsed.iv, 'base64')
+    const ciphertext = Buffer.from(parsed.ciphertext, 'base64')
+    const tag = Buffer.from(parsed.tag, 'base64')
+    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv)
+    decipher.setAuthTag(tag)
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+    return JSON.parse(plaintext.toString('utf8')) as CookieFilePayload
   }
 
   private ingest(payload: CookieFilePayload): void {

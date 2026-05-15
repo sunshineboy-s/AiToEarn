@@ -5,6 +5,17 @@ export interface CookieVaultModuleConfig {
   cookieFile: string
   /** Inline JSON string (alternative to cookieFile). */
   cookieJson: string
+  /**
+   * Optional encryption secret. When non-empty:
+   * - reads decrypt entries with envelope `{ alg:'AES-256-GCM', iv, ciphertext, tag }`
+   * - the same key is used to decrypt entries served from a future production
+   *   path (the channel-db EngagementCookieVault).
+   *
+   * The secret is HKDF-derived to a 32-byte AES key at boot, so callers can
+   * supply any non-empty string. In production this should come from KMS or
+   * a sealed secret store (do NOT commit).
+   */
+  encryptionSecret?: string
 }
 
 /**

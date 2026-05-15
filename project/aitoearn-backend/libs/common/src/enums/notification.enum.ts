@@ -14,4 +14,5 @@ export enum NotificationType {
   TaskReviewRejected = 'task_review_rejected',
   TaskReviewApproved = 'task_review_approved',
   TaskSettled = 'task_settled',
+  BrandMention = 'brand_mention',
 }
