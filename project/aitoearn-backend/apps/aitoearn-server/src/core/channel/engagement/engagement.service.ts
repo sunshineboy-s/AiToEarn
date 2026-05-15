@@ -10,18 +10,37 @@ import { ReplyToCommentAnswer } from './ai.dto'
 import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
 import { EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
+import { BilibiliEngagementProvider } from './providers/bilibili.provider'
+import { DouyinEngagementProvider } from './providers/douyin.provider'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
+import { KwaiEngagementProvider } from './providers/kwai.provider'
+import { LinkedinEngagementProvider } from './providers/linkedin.provider'
+import { PinterestEngagementProvider } from './providers/pinterest.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
+import { TiktokEngagementProvider } from './providers/tiktok.provider'
+import { TwitterEngagementProvider } from './providers/twitter.provider'
+import { WxGzhEngagementProvider } from './providers/wx-gzh.provider'
+import { XhsEngagementProvider } from './providers/xhs.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
 
 @Injectable()
 export class EngagementService {
   private readonly providerMap = new Map<string, EngagementProvider>()
+
   constructor(
+    bilibiliProvider: BilibiliEngagementProvider,
+    douyinProvider: DouyinEngagementProvider,
     facebookProvider: FacebookEngagementProvider,
     instagramProvider: InstagramEngagementProvider,
+    kwaiProvider: KwaiEngagementProvider,
+    linkedinProvider: LinkedinEngagementProvider,
+    pinterestProvider: PinterestEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
+    tiktokProvider: TiktokEngagementProvider,
+    twitterProvider: TwitterEngagementProvider,
+    wxGzhProvider: WxGzhEngagementProvider,
+    xhsProvider: XhsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
@@ -29,9 +48,19 @@ export class EngagementService {
     private readonly facebookService: FacebookService,
     private readonly channelAccountService: ChannelAccountService,
   ) {
+    // Map keys mirror the platform values accepted by the engagement DTOs.
+    this.providerMap.set('bilibili', bilibiliProvider)
+    this.providerMap.set('douyin', douyinProvider)
     this.providerMap.set('facebook', facebookProvider)
     this.providerMap.set('instagram', instagramProvider)
+    this.providerMap.set('KWAI', kwaiProvider)
+    this.providerMap.set('linkedin', linkedinProvider)
+    this.providerMap.set('pinterest', pinterestProvider)
     this.providerMap.set('threads', threadsProvider)
+    this.providerMap.set('tiktok', tiktokProvider)
+    this.providerMap.set('twitter', twitterProvider)
+    this.providerMap.set('wxGzh', wxGzhProvider)
+    this.providerMap.set('xhs', xhsProvider)
     this.providerMap.set('youtube', youtubeProvider)
   }
 

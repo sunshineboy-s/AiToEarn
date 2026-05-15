@@ -1,67 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { AccountType } from '@yikart/common'
-import { AccountRepository } from '@yikart/mongodb'
-import { KwaiService } from '../platforms/kwai/kwai.service'
-import { DataCubeBase } from './data.base'
+import { BaseUnsupportedDataCubeService } from './unsupported.base'
 
+/**
+ * Kuaishou (KWAI) data-cube — skeleton.
+ *
+ * Kuaishou Open Platform exposes user/works data APIs that map cleanly
+ * to ChannelAccountDataCube / ChannelArcDataCube. They're scope-gated.
+ * Real impl will route through `KwaiService` once the corp app is
+ * granted the `clientCredential.userInfo` and `data` scopes.
+ *
+ * Replaces the prior placeholder which subscribed to the wrong event
+ * (`AccountType.Xhs`) and silently returned zeros.
+ */
 @Injectable()
-export class KwaiDataService extends DataCubeBase {
-  private readonly logger = new Logger(KwaiService.name)
-  constructor(
-    readonly kwaiService: KwaiService,
-    private readonly accountRepository: AccountRepository,
-  ) {
-    super()
-  }
+export class KwaiDataService extends BaseUnsupportedDataCubeService {
+  protected readonly platform = 'KWAI'
+  protected readonly logger = new Logger(KwaiDataService.name)
+  protected readonly unsupportedReason
+    = 'Kuaishou Open Platform data scopes not yet provisioned'
 
-  @OnEvent(`account.create.${AccountType.Xhs}`)
-  async accountPortraitReport(accountId: string) {
-    const res = await this.getAccountDataCube(accountId)
-    await this.accountRepository.updateAccountStatistics(accountId, {
-      fansCount: res.fensNum,
-      workCount: res.arcNum,
-      readCount: res.playNum,
-    })
-  }
-
-  // 账户数据
-  async getAccountDataCube(accountId: string) {
-    this.logger.log(`getAccountDataCube accountId: ${accountId}`)
-
-    return {
-      fensNum: 0,
-      arcNum: 0,
-      playNum: 0,
-    }
-  }
-
-  // 账户数据增量
-  async getAccountDataBulk(accountId: string) {
-    this.logger.log('getAccountDataBulk', accountId)
-    return {
-      list: [],
-    }
-  }
-
-  // 作品数据
-  async getArcDataCube(accountId: string, dataId: string) {
-    this.logger.log('getArcDataCube', accountId, dataId)
-    return {
-      fensNum: 0,
-      likeNum: 0,
-      playNum: 0,
-      commentNum: 0,
-    }
-  }
-
-  // 作品数据增量
-  async getArcDataBulk(accountId: string, dataId: string) {
-    this.logger.log('getArcDataBulk', accountId, dataId)
-    return {
-      recordId: '',
-      dataId: '',
-      list: [],
-    }
+  @OnEvent(`account.create.${AccountType.KWAI}`)
+  override async accountPortraitReport(accountId: string): Promise<void> {
+    return super.accountPortraitReport(accountId)
   }
 }
