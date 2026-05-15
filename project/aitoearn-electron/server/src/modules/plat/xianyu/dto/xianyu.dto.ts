@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateXianyuItemDto {
   @ApiProperty({ description: '商品标题（30字以内）' })
@@ -31,7 +39,10 @@ export class CreateXianyuItemDto {
   @IsOptional()
   videoUrl?: string;
 
-  @ApiProperty({ description: '成色：1=全新, 2=99新, 3=95新, 4=9成新, 5=8成新及以下', required: false })
+  @ApiProperty({
+    description: '成色：1=全新, 2=99新, 3=95新, 4=9成新, 5=8成新及以下',
+    required: false,
+  })
   @IsInt()
   @Min(1)
   @IsOptional()

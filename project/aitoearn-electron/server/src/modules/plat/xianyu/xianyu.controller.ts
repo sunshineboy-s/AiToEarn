@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { XianyuService } from './xianyu.service';
 import { CreateXianyuItemDto, XianyuItemFilterDto } from './dto/xianyu.dto';
@@ -10,7 +19,10 @@ export class XianyuController {
 
   @Post('items')
   @ApiOperation({ summary: '发布闲鱼商品（Cookie 通路）' })
-  publishItem(@Query('accountId') accountId: string, @Body() dto: CreateXianyuItemDto) {
+  publishItem(
+    @Query('accountId') accountId: string,
+    @Body() dto: CreateXianyuItemDto,
+  ) {
     if (!accountId) throw new BadRequestException('accountId 是必须的');
     return this.xianyuService.publishItem(accountId, dto);
   }
@@ -18,7 +30,10 @@ export class XianyuController {
   @Delete('items/:itemId')
   @ApiOperation({ summary: '下架闲鱼商品' })
   @ApiParam({ name: 'itemId' })
-  deleteItem(@Query('accountId') accountId: string, @Param('itemId') itemId: string) {
+  deleteItem(
+    @Query('accountId') accountId: string,
+    @Param('itemId') itemId: string,
+  ) {
     if (!accountId) throw new BadRequestException('accountId 是必须的');
     return this.xianyuService.deleteItem(accountId, itemId);
   }
