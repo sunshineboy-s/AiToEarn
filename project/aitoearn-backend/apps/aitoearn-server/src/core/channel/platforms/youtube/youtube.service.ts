@@ -476,6 +476,24 @@ export class YoutubeService extends PlatformBaseService {
   }
 
   /**
+   * Build a *fresh* OAuth2 client with this account's access token.
+   *
+   * Unlike `initializeYouTubeClient`, this does NOT mutate the shared
+   * `this.oauth2Client`. Callers (e.g. YoutubeAnalyticsService) can use
+   * this to safely make per-request authed calls without racing with
+   * concurrent requests for other accounts.
+   *
+   * The broader cleanup of moving this service off the shared
+   * `oauth2Client` is tracked under RFC 0001 §6.3.
+   */
+  async buildAuthedOAuth2Client(accountId: string): Promise<Auth.OAuth2Client> {
+    const accessToken = await this.getUserAccessToken(accountId)
+    const client = new google.auth.OAuth2()
+    client.setCredentials({ access_token: accessToken })
+    return client
+  }
+
+  /**
    * 检查用户是否已授权YouTube
    * @param accountId 账号ID
    * @returns 是否已授权

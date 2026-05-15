@@ -18,6 +18,10 @@ import { YoutubeService } from './youtube.service'
   ],
   controllers: [YoutubeController],
   providers: [YoutubeService],
-  exports: [YoutubeService],
+  // Re-export YoutubeApiModule so that consumers who import YoutubeModule
+  // (e.g. DataCubeModule) can also DI YoutubeAnalyticsService without
+  // having to import the libs module directly. YoutubeService is the
+  // public face of "everything YouTube" for the application layer.
+  exports: [YoutubeService, YoutubeApiModule],
 })
 export class YoutubeModule {}
