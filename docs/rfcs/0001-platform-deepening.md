@@ -1,61 +1,65 @@
-# RFC 0001: Deepening Platform Coverage (Bilibili / Douyin / XHS / TikTok / YouTube / Instagram)
+# RFC 0001: Deepening Platform Coverage
 
 - **Status**: Draft
 - **Author**: harry / contributors
 - **Created**: 2026-05-15
-- **Discussion**: open as PR comment thread
+- **Last updated**: 2026-05-15 (full-skeleton revision)
+- **Discussion**: PR comment thread
 
 ## TL;DR
 
-AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engagement（互动）模块在很多平台上是空架子或返回 0**。本 RFC 把当前状态、目标差距、可借鉴的开源项目和分阶段路线图写下来，让社区贡献者明确从哪里下手。
+AiToEarn 列出 15 个 `AccountType`，但 **data-cube（数据分析）和 engagement（互动）模块在大多数平台上要么完全没注册，要么默默返回 0/空**。这是一个用户调用就会发现的信任问题。
 
-随本 RFC 一起合入的 PR 修复了最浅的一个洞：把 **抖音 / TikTok / 小红书** 接到 `data-cube`，让 `/channel/dataCube/*` 在这三个平台上不再 404。详见下方 [P0 立即落地](#p0-立即落地）。
+本 RFC 一并合入的 PR 把骨架铺满：
+- **15 个平台** 在 `DataCubeController.dataCubeMap` 都有注册
+- **13 个平台** 在 `EngagementService.providerMap` 都有注册（视频号 / Google Business 不在 engagement 域）
+- 凡是没真实 backend 的，统一走 `BaseUnsupportedDataCubeService` / `BaseUnsupportedEngagementProvider` 抽象基类——**调用不再 500/404，返回结构化空响应 + 一行 `logger.warn` 留 trace**
 
-## 1. 现状盘点
+## 1. 现状盘点（合入本 PR 后）
 
 > 调研日期：2026-05-15。范围：`apps/aitoearn-server/src/core/channel/`。
 
-| 平台 | OAuth | Publish | data-cube | engagement | 工作链路完整度 |
-|---|---|---|---|---|---|
-| Bilibili | ✅ | ✅ | ✅ 真接入 (`getUserStat / getArcStat`) | ❌ 无 provider | 7/10 |
-| Douyin | ✅ | ✅ | ⚠️ 已挂上 controller，但 `DouyinApiService.getUserStat` 仍是占位 | ❌ | 6/10 |
-| Xiaohongshu | ⚠️ stub | ✅ | ⚠️ 已挂上 controller，但 service 五个方法仍是 stub | ❌ | 4/10 |
-| Kwai (快手) | ✅ | ✅ | ❌ data-cube service 不存在 | ❌ | 5/10 |
-| WeChat 公众号 | ✅ | ✅ | ✅ | ❌ | 7/10 |
-| WeChat Channels (视频号) | ✅ | ✅ | ❌ | ❌ | 5/10 |
-| TikTok | ✅ | ✅ | ✅ 已挂上 controller，新增真实 API 调用 | ❌ | 7/10 |
-| YouTube | ✅ | ✅ | ✅ Data API（**缺 Analytics API**） | ✅ provider | 8/10 |
-| Instagram | ✅ | ✅ | ✅ Insights | ✅ provider | 8/10 |
-| Facebook | ✅ | ✅ | ✅ | ✅ provider | 7/10 |
-| Threads | ✅ | ✅ | ✅ | ✅ provider | 7/10 |
-| Pinterest | ✅ | ✅ | ✅ | ❌ | 6/10 |
-| LinkedIn | ✅ | ✅ | ❌ | ❌ | 5/10 |
-| **闲鱼** | ❌ | ❌ | ❌ | ❌ | **0/10（完全没接入）** |
+「真接入」= 真实 API 调用；「stub」= 走 Unsupported base 返回空 + warn；「—」= 不适用 / 未开放。
 
-证据可在以下文件直接读到：
-- `data-cube/data-cube.controller.ts` — `dataCubeMap` 现在挂的平台数（合入此 PR 前为 3，合入后为 5）
-- `data-cube/xhs-data.service.ts` — 5 个方法返回硬编码 0
-- `libs/douyin/douyin-api.service.ts` — `getUserStat / getArcStat / getArcIncStat` 是 stub
-- `engagement/providers/` — 仅有 `facebook / instagram / threads / youtube`
+| 平台 (`AccountType`) | OAuth | Publish | data-cube | engagement |
+|---|---|---|---|---|
+| Bilibili | ✅ | ✅ | ✅ 真接入 (`getUserStat` / `getArcStat`) | ✅ 真接入 (`fetchUserPosts` / `getMetaPostDetail`) — 评论方法仍 stub |
+| Douyin | ✅ | ✅ | 🟡 wrap 真接入但下层 `DouyinApiService` 仍是占位 | 🟡 stub |
+| Xiaohongshu | ⚠️ stub | ✅ | 🟡 注册了但 `XhsDataService` 五个方法是 stub | 🟡 stub |
+| Kwai (快手) | ✅ | ✅ | 🟡 stub（Open Platform scope 未开通）| 🟡 stub |
+| WeChat 公众号 | ✅ | ✅ | ✅ 真接入 (`WxGzhDataService`) | 🟡 stub |
+| WeChat 视频号 | ✅ | ✅ | 🟡 stub（无 Open API）| — |
+| TikTok | ✅ | ✅ | ✅ 真接入 (`/v2/user/info/` + `/v2/video/list/`) | 🟡 stub（Research API 限制）|
+| YouTube | ✅ | ✅ | ✅ Data API（缺 Analytics API 维度）| ✅ 真接入 |
+| Instagram | ✅ | ✅ | ✅ Insights | ✅ 真接入 |
+| Facebook | ✅ | ✅ | ✅ Insights | ✅ 真接入 |
+| Threads | ✅ | ✅ | ✅ | ✅ 真接入 |
+| Pinterest | ✅ | ✅ | ✅ | 🟡 stub（API v5 无评论端点）|
+| LinkedIn | ✅ | ✅ | 🟡 stub（partner-program 待审）| 🟡 stub |
+| Twitter / X | ✅ | ✅ | 🟡 stub（Free tier 限频）| 🟡 stub |
+| Google Business | ✅ | ✅ | 🟡 stub（POI 指标待映射 RFC）| — |
+
+每个 stub 在源代码里都标注了 `unsupportedReason`，方便日志检索：
+
+```
+xhs.fetchPostComments.unsupported  reason=Xiaohongshu has no Open Platform; cookie/browser fallback pending RFC
+```
 
 ## 2. 目标
 
-按用户视角，AiToEarn 的"数据分析"和"互动"应该在这些平台上都能用：
-
-> **B站、抖音、小红书、快手、视频号、TikTok、YouTube、Instagram、Facebook、Threads、Pinterest、LinkedIn**
-
-> **闲鱼**：本 RFC 不规划。原因见 [§5](#5-非目标-闲鱼)。
+按用户视角，AiToEarn 的「数据分析」和「互动」应该在 14+ 个创作平台上都能用。Google Business 是 POI 业务，模型不同，本 RFC 不强求对齐。
 
 具体到能力上：
-- **data-cube account / arc level**：粉丝/作品数/曝光/点赞/评论/分享/收藏 至少返回真实数（增量列表 P2）
+- **data-cube**：account / arc 两层，粉丝/作品数/曝光/点赞/评论/分享/收藏 至少返回真实数（增量列表 P2）
 - **engagement**：评论拉取 + 评论挖掘（识别"求链接""怎么买"）+ AI 回复，至少在头部 4 个平台（XHS / 抖音 / B站 / TikTok）能跑
 
 ## 3. 非目标
 
-- **不做** Google NotebookLM 集成（不可控的浏览器自动化 + Google ToS）
-- **不做** WSJ/NYT/FT 的 paywall bypass（合规雷）
-- **不做** TikTok Research API（需要学术机构资格）
-- **不做** YouTube 私有 API 抓取（封号风险）
+- ❌ Google NotebookLM 集成（不可控的浏览器自动化 + Google ToS）
+- ❌ WSJ/NYT/FT 的 paywall bypass（合规雷）
+- ❌ TikTok Research API（需要学术机构资格）
+- ❌ YouTube 私有 API 抓取（封号风险）
+- ❌ 闲鱼（业务形态不匹配，详见 §5）
 
 ## 4. 可借鉴的开源项目
 
@@ -78,7 +82,7 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 | Instagram | `adw0rd/instagrapi` | 私有 API 路径，覆盖 reels insights / 私信 / stories |
 | TikTok | `kairi003/TiktokAutoUploader` | 浏览器自动化批量上传作为 fallback |
 
-### 4.3 RFC 编写中需补的研究
+### 4.3 待补研究
 
 - 微信视频号：是否有半官方 API？目前仅有 Electron 扫码登录态。
 - LinkedIn：UGC API + Analytics API 文档是否覆盖 data-cube 五项指标。
@@ -93,65 +97,62 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 
 ## 6. 路线图
 
-### 6.1 P0 立即落地
+### 6.1 ✅ P0-A 完成（本 PR）
 
-> **本 RFC 一起合入的 PR 已完成下列前两项**。第三项（抖音 API 真接入）和第四项（engagement provider）需要单独 PR，因为涉及外部 API 与 cookie 抓取策略。
+骨架铺满，把"用户调用就 500"的洞全部堵住：
 
-1. ✅ **抖音 / TikTok 接入 data-cube**
-   - 新建 `douyin-data.service.ts`（包了 `DouyinService.getUserStat / getArcStat`）
-   - 新建 `tiktok-data.service.ts`（用 `/v2/user/info/` + `/v2/video/list/`）
-   - `data-cube.controller.ts` 的 `dataCubeMap` 注册新 key
-   - `data-cube.module.ts` 引入 `DouyinModule / TiktokModule` 并 provide 新 service
-2. ✅ **小红书 stub 显式接入 data-cube**
-   - 把已有 `XhsDataService` 加入 `data-cube.module.ts` 的 providers
-   - `dataCubeMap.set(AccountType.Xhs, xhsDataService)` 让路由不再 404
-   - 行为依然是返回 0（service 现状），但通过 logger 留信号；真接入见下一条
-3. 🔲 **抖音 API 真接入**：把 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 的占位实现替换为对应 [抖音开放平台数据 API](https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/account-data) 的真实调用
-4. 🔲 **小红书 API 真接入**：XHS 没有开放平台，需独立 RFC 评审 cookie 抓取或浏览器自动化方案
-5. 🔲 **engagement provider 补全 4 个平台**（XHS / 抖音 / B站 / TikTok）
-   - 优先实现"评论拉取 + 评论挖掘"，"AI 回复"复用现有 prompt 链路
+- [x] 15 个平台全部在 `DataCubeController.dataCubeMap` 注册
+- [x] 13 个创作平台全部在 `EngagementService.providerMap` 注册
+- [x] 引入 `BaseUnsupportedDataCubeService` / `BaseUnsupportedEngagementProvider` 抽象基类，统一 stub 行为
+- [x] B站 engagement `fetchUserPosts` 真接入（`archive/viewlist` + `arc/stat` 富化）
+- [x] 抖音 / TikTok / 小红书 接入 data-cube 路由
+- [x] 修复 `KwaiDataService` 之前订阅了错误事件（`AccountType.Xhs`）
 
-### 6.2 P1 抽通用底座
+### 6.2 🔲 P0-B 把 stub 替换成真接入（按 ROI）
 
-5. **抽 `PlatformAnalyticsAdapter` 接口**
-   - 把 `data.base.ts` 的 5 个方法 + Analytics 时序数据 + 受众画像 + 内容榜单 统一为一个 base
-   - 每个平台填自己的实现，避免一个平台一份"抄过来改改"
-6. **抽 `BrowserAutomationModule`**
-   - 独立成 `apps/aitoearn-browser-worker`（Playwright + Chromium 镜像）
-   - 给 XHS / 视频号 / 抖音的兜底通道用
+每条都是独立 PR：
 
-### 6.3 P2 升级现有平台的分析深度
+1. **抖音 API 真接入**：替换 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 的占位为开放平台真实 HTTP 调用
+2. **YouTube Analytics API**：升级 `YoutubeDataService`，补 watchTime / 留存 / 受众画像
+3. **抖音 engagement 评论**：开放平台 `item/comment/list` + `item/comment/reply`
+4. **B站 engagement 评论**：等 Open Platform 开放评论 scope；也可走 cookie-mode 兜底（独立 RFC）
+5. **小红书 cookie/Playwright RFC**：评审兜底方案的法务和封号风险
 
-7. **YouTube 接 Analytics API**
-   - watchTime / averageViewPercentage / subscribersGained / 按地区/按设备
-8. **Instagram 接 Audience Insights**
-   - 性别/年龄/地区分布、活跃时段
-9. **B 站 用户增量数据 (按日)**
-   - 当前 `getAccountDataBulk` 返回 `[]`，B 站官方有 `data-online` 端点
+### 6.3 P1 抽通用底座
 
-### 6.4 P3 待决策
+6. **抽 `PlatformAnalyticsAdapter` 接口**——把 `data.base.ts` 的 5 个方法 + 时序数据 + 受众画像 + 内容榜单 统一为一个 base
+7. **抽 `BrowserAutomationModule`**——独立成 `apps/aitoearn-browser-worker`（Playwright + Chromium 镜像），给 XHS / 视频号 / 抖音的兜底通道用
 
-10. **快手 / 视频号 / LinkedIn data-cube** — 需评审 API 可用性
-11. **TikTok 增量数据** — 需评估 Research API 申请成本
-12. **闲鱼** — 见 §5，原则上不做
+### 6.4 P2 升级现有平台的分析深度
+
+8. Instagram Audience Insights（性别/年龄/地区分布、活跃时段）
+9. B站用户增量数据（按日，B 站官方有 `data-online` 端点）
+
+### 6.5 P3 待决策
+
+10. 快手 / LinkedIn data-cube — 等 scope/partner 审批
+11. TikTok 增量数据 — 需评估 Research API 申请成本
+12. 闲鱼 — 见 §5，原则上不做
 
 ## 7. 设计准则（写在 base 类里的"宪法"）
 
-每个 `PlatformAnalyticsAdapter` 必须遵守：
+每个 adapter / provider 必须遵守：
 
-1. **真假数分离**：真实 API 返回放在 method body；占位实现至少用 `this.logger.warn` 标明，禁止默默返回 0
-2. **失败可降级**：API 调用失败必须 `throw PlatformAuthExpired / PlatformRateLimited`，不允许 `return null` 让上层猜
-3. **指标命名统一**：`fensNum / arcNum / playNum / likeNum / commentNum / shareNum / collectNum`，禁止平台之间字段不一致（这是当前一大坑）
+1. **真假数分离**：真实 API 返回放在 method body；占位实现走 `BaseUnsupported*`，**禁止默默返回 0**
+2. **失败可降级**：API 调用失败必须 `throw PlatformAuthExpired / PlatformRateLimited`，**不允许 `return null` 让上层猜**
+3. **指标命名统一**：`fensNum / arcNum / playNum / likeNum / commentNum / shareNum / collectNum`，平台之间字段不允许漂移
 4. **OnEvent 收口**：账号创建即 `accountPortraitReport`，禁止业务代码自己再去 trigger 一次
-5. **可观测性**：每次外部 API 调用必须打 `path / accountId / latency / errorCode` 四元组到 logger
+5. **可观测性**：每次外部 API 调用必须打 `path / accountId / latency / errorCode` 四元组；每次 stub 命中必须打 `path / reason`
 
-## 8. 验收标准（P0）
+## 8. 验收标准（本 PR）
 
-- [ ] `GET /channel/dataCube/accountDataCube/{accountId}` 在抖音/TikTok 账号上返回非零字段（如账号确实有数据）
-- [ ] `GET /channel/dataCube/accountDataCube/{accountId}` 在 XHS 账号上不再 404，返回 0 但有 logger 警告
-- [ ] `pnpm nx build aitoearn-server` 通过
-- [ ] `pnpm nx lint aitoearn-server` 不引入新 error
-- [ ] 不破坏现有 bilibili / youtube / instagram / threads / facebook 的行为
+- [x] `GET /channel/dataCube/accountDataCube/{accountId}` 在 15 个 AccountType 上都不再因 `DataCubeAccountTypeNotSupported` 直接拒绝
+- [x] engagement controller 在 13 个创作平台 AccountType 上都不再 `provider not found` 500
+- [x] 所有 stub 命中都产生一条结构化 warn 日志，便于 ops 检索
+- [x] `pnpm nx build aitoearn-server` 通过
+- [x] `pnpm exec eslint apps/aitoearn-server/src/core/channel/{data-cube,engagement}/` 不引入新 error（仅 4 条 pre-existing warning）
+- [x] B站 engagement 在 `fetchUserPosts` / `getMetaPostDetail` 上返回真实数据
+- [x] 不破坏既有的 facebook / instagram / threads / youtube / pinterest / wxGzh 行为
 
 ## 9. 参考资料
 
@@ -161,3 +162,6 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 - [Bilibili - 创作中心 API](https://github.com/SocialSisterYi/bilibili-API-collect)
 - [Instagram Graph API - Insights](https://developers.facebook.com/docs/instagram-platform/insights)
 - [YouTube Analytics & Reporting API](https://developers.google.com/youtube/analytics)
+- [LinkedIn UGC Posts & socialActions](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/community-management/shares/ugc-post-api)
+- [Pinterest API v5](https://developers.pinterest.com/docs/api/v5/)
+- [Google Business Profile Performance API](https://developers.google.com/my-business/reference/performance/rest)

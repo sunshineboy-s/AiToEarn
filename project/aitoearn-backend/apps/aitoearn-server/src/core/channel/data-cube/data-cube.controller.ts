@@ -8,8 +8,17 @@ import { ChannelAccountService } from '../platforms/channel-account.service'
 import { BilibiliDataService } from './bilibili-data.service'
 import { DataCubeBase } from './data.base'
 import { DouyinDataService } from './douyin-data.service'
+import { FacebookDataService } from './facebook-data.service'
+import { GoogleBusinessDataService } from './google-business-data.service'
+import { InstagramDataService } from './instagram.service'
+import { KwaiDataService } from './kwai-data.service'
+import { LinkedinDataService } from './linkedin-data.service'
+import { PinterestDataService } from './pinterest-data.service'
+import { ThreadsDataService } from './threads.service'
 import { TiktokDataService } from './tiktok-data.service'
+import { TwitterDataService } from './twitter-data.service'
 import { WxGzhDataService } from './wx-gzh-data.service'
+import { WxSphDataService } from './wx-sph-data.service'
 import { XhsDataService } from './xhs-data.service'
 import { YoutubeDataService } from './youtube-data.service'
 
@@ -22,17 +31,35 @@ export class DataCubeController {
     readonly channelAccountService: ChannelAccountService,
     readonly bilibiliDataService: BilibiliDataService,
     readonly douyinDataService: DouyinDataService,
+    readonly facebookDataService: FacebookDataService,
+    readonly googleBusinessDataService: GoogleBusinessDataService,
+    readonly instagramDataService: InstagramDataService,
+    readonly kwaiDataService: KwaiDataService,
+    readonly linkedinDataService: LinkedinDataService,
+    readonly pinterestDataService: PinterestDataService,
+    readonly threadsDataService: ThreadsDataService,
     readonly tiktokDataService: TiktokDataService,
+    readonly twitterDataService: TwitterDataService,
+    readonly wxGzhDataService: WxGzhDataService,
+    readonly wxSphDataService: WxSphDataService,
     readonly xhsDataService: XhsDataService,
     readonly youtubeDataService: YoutubeDataService,
-    readonly wxGzhDataService: WxGzhDataService,
   ) {
     this.dataCubeMap.set(AccountType.BILIBILI, bilibiliDataService)
     this.dataCubeMap.set(AccountType.Douyin, douyinDataService)
+    this.dataCubeMap.set(AccountType.FACEBOOK, facebookDataService)
+    this.dataCubeMap.set(AccountType.GOOGLE_BUSINESS, googleBusinessDataService)
+    this.dataCubeMap.set(AccountType.INSTAGRAM, instagramDataService)
+    this.dataCubeMap.set(AccountType.KWAI, kwaiDataService)
+    this.dataCubeMap.set(AccountType.LINKEDIN, linkedinDataService)
+    this.dataCubeMap.set(AccountType.PINTEREST, pinterestDataService)
+    this.dataCubeMap.set(AccountType.THREADS, threadsDataService)
     this.dataCubeMap.set(AccountType.TIKTOK, tiktokDataService)
+    this.dataCubeMap.set(AccountType.TWITTER, twitterDataService)
+    this.dataCubeMap.set(AccountType.WxGzh, wxGzhDataService)
+    this.dataCubeMap.set(AccountType.WxSph, wxSphDataService)
     this.dataCubeMap.set(AccountType.Xhs, xhsDataService)
     this.dataCubeMap.set(AccountType.YOUTUBE, youtubeDataService)
-    this.dataCubeMap.set(AccountType.WxGzh, wxGzhDataService)
   }
 
   private async getDataCube(accountId: string) {
