@@ -24,7 +24,7 @@ AiToEarn 列出 15 个 `AccountType`，但 **data-cube（数据分析）和 enga
 | 平台 (`AccountType`) | OAuth | Publish | data-cube | engagement |
 |---|---|---|---|---|
 | Bilibili | ✅ | ✅ | ✅ 真接入 (`getUserStat` / `getArcStat`) | ✅ 真接入 (`fetchUserPosts` / `getMetaPostDetail`) — 评论方法仍 stub |
-| Douyin | ✅ | ✅ | 🟡 wrap 真接入但下层 `DouyinApiService` 仍是占位 | 🟡 stub |
+| Douyin | ✅ | ✅ | 🟡 wrap 真接入但下层 `DouyinApiService` 仍是占位 | ✅ comments/replies/reply-create 真接入；`fetchUserPosts`/`getMetaPostDetail`/`commentOnPost` 仍 stub |
 | Xiaohongshu | ⚠️ stub | ✅ | 🟡 注册了但 `XhsDataService` 五个方法是 stub | 🟡 stub |
 | Kwai (快手) | ✅ | ✅ | 🟡 stub（Open Platform scope 未开通）| 🟡 stub |
 | WeChat 公众号 | ✅ | ✅ | ✅ 真接入 (`WxGzhDataService`) | 🟡 stub |
@@ -105,6 +105,7 @@ xhs.fetchPostComments.unsupported  reason=Xiaohongshu has no Open Platform; cook
 - [x] 13 个创作平台全部在 `EngagementService.providerMap` 注册
 - [x] 引入 `BaseUnsupportedDataCubeService` / `BaseUnsupportedEngagementProvider` 抽象基类，统一 stub 行为
 - [x] B站 engagement `fetchUserPosts` 真接入（`archive/viewlist` + `arc/stat` 富化）
+- [x] 抖音 engagement 评论真接入（`item/comment/list/`、`item/reply/list/`、`create_comment_reply/`）；`commentOnPost` 在 Open Platform 无对应能力，明确 stub 不伪装
 - [x] 抖音 / TikTok / 小红书 接入 data-cube 路由
 - [x] 修复 `KwaiDataService` 之前订阅了错误事件（`AccountType.Xhs`）
 
@@ -114,7 +115,7 @@ xhs.fetchPostComments.unsupported  reason=Xiaohongshu has no Open Platform; cook
 
 1. **抖音 API 真接入**：替换 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 的占位为开放平台真实 HTTP 调用
 2. **YouTube Analytics API**：升级 `YoutubeDataService`，补 watchTime / 留存 / 受众画像
-3. **抖音 engagement 评论**：开放平台 `item/comment/list` + `item/comment/reply`
+3. **抖音 engagement smoke test**：comment 三个端点已实现但未在仓库内对真实 corp 账号验证；首次部署需要冒烟测试
 4. **B站 engagement 评论**：等 Open Platform 开放评论 scope；也可走 cookie-mode 兜底（独立 RFC）
 5. **小红书 cookie/Playwright RFC**：评审兜底方案的法务和封号风险
 

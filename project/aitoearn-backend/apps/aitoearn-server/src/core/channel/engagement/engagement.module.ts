@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { BilibiliModule } from '../platforms/bilibili/bilibili.module'
 import { ChannelSharedModule } from '../platforms/channel-shared.module'
+import { DouyinModule } from '../platforms/douyin/douyin.module'
 import { MetaModule } from '../platforms/meta/meta.module'
 import { YoutubeModule } from '../platforms/youtube/youtube.module'
 import { EngagementController } from './engagement.controller'
@@ -24,6 +25,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
 
 const realProviders = [
   BilibiliEngagementProvider,
+  DouyinEngagementProvider,
   FacebookEngagementProvider,
   InstagramEngagementProvider,
   ThreadsEngagementProvider,
@@ -31,7 +33,6 @@ const realProviders = [
 ]
 
 const stubProviders = [
-  DouyinEngagementProvider,
   KwaiEngagementProvider,
   LinkedinEngagementProvider,
   PinterestEngagementProvider,
@@ -45,6 +46,7 @@ const stubProviders = [
   imports: [
     BilibiliModule,
     ChannelSharedModule,
+    DouyinModule,
     MetaModule,
     YoutubeModule,
   ],
