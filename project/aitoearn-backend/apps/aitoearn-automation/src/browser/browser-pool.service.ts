@@ -1,18 +1,26 @@
-import type { Browser, BrowserContext, Page } from 'playwright'
-import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common'
+import type { Browser, BrowserContext, Cookie, Page } from 'playwright'
+import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common'
 import { BROWSER_CONFIG, BrowserModuleConfig } from './browser.constants'
+import { ProxyService } from './proxy.service'
 import { getStealthChromium } from './stealth'
 
 interface PooledContext {
   context: BrowserContext
   ownerKey: string
+  proxyKey: string
   busy: boolean
   lastUsedAt: number
 }
 
+const NO_PROXY_KEY = '__direct__'
+
 /**
  * One BrowserContext per (platform, accountId) pair, kept warm in an LRU pool
  * so cookies/fingerprints survive between actions while staying isolated.
+ *
+ * Proxy handling: each unique proxy spins its own Chromium because the launch
+ * `proxy` option is per-Browser, not per-Context. The legacy single-proxy
+ * config flow is preserved (still works without {@link ProxyService}).
  *
  * NOTE: PoC scope. Locks are coarse (per-pool-mutex would be the next step);
  * the current implementation is sufficient for the single-account demo flow.
@@ -20,11 +28,17 @@ interface PooledContext {
 @Injectable()
 export class BrowserPoolService implements OnModuleDestroy {
   private readonly logger = new Logger(BrowserPoolService.name)
-  private browser: Browser | null = null
+  /** Map proxyKey → live Browser. Empty string is used for "direct". */
+  private readonly browsers = new Map<string, Browser>()
   private readonly contexts = new Map<string, PooledContext>()
 
   constructor(
     @Inject(BROWSER_CONFIG) private readonly config: BrowserModuleConfig,
+    /**
+     * ProxyService is optional so the test fixture and the original
+     * single-proxy boot flow keep working with no module wiring changes.
+     */
+    @Optional() private readonly proxyService?: ProxyService,
   ) {}
 
   async onModuleDestroy(): Promise<void> {
@@ -37,23 +51,31 @@ export class BrowserPoolService implements OnModuleDestroy {
       }
     }
     this.contexts.clear()
-    if (this.browser) {
-      await this.browser.close().catch(() => {})
-      this.browser = null
-    }
+    for (const browser of this.browsers.values())
+      await browser.close().catch(() => {})
+    this.browsers.clear()
   }
 
   /**
    * Acquire (or create) a BrowserContext for the given owner key. Cookies
    * supplied here are merged on first use; subsequent acquisitions reuse the
    * same context.
+   *
+   * `accountId` opts an account into per-account sticky proxy assignment via
+   * {@link ProxyService}. Falls back to {@link BrowserModuleConfig.proxy} or
+   * direct egress when no pool is configured.
    */
   async acquire(
     ownerKey: string,
-    cookies: import('playwright').Cookie[] = [],
+    cookies: Cookie[] = [],
+    opts?: { accountId?: string },
   ): Promise<{ context: BrowserContext, page: Page, release: () => Promise<void> }> {
-    const browser = await this.ensureBrowser()
-    let pooled = this.contexts.get(ownerKey)
+    const proxyUrl = this.resolveProxy(opts?.accountId)
+    const proxyKey = proxyUrl ?? NO_PROXY_KEY
+    const browser = await this.ensureBrowser(proxyUrl, proxyKey)
+
+    const compositeKey = `${proxyKey}|${ownerKey}`
+    let pooled = this.contexts.get(compositeKey)
     if (!pooled) {
       const context = await browser.newContext({
         userAgent: this.config.userAgent,
@@ -63,9 +85,9 @@ export class BrowserPoolService implements OnModuleDestroy {
       })
       if (cookies.length)
         await context.addCookies(cookies)
-      pooled = { context, ownerKey, busy: false, lastUsedAt: Date.now() }
-      this.contexts.set(ownerKey, pooled)
-      this.logger.log(`Created context ${ownerKey} (pool size=${this.contexts.size})`)
+      pooled = { context, ownerKey: compositeKey, proxyKey, busy: false, lastUsedAt: Date.now() }
+      this.contexts.set(compositeKey, pooled)
+      this.logger.log(`Created context ${compositeKey} (pool size=${this.contexts.size})`)
       await this.evictIfNeeded()
     }
     else if (cookies.length) {
@@ -92,16 +114,32 @@ export class BrowserPoolService implements OnModuleDestroy {
     await new Promise(resolve => setTimeout(resolve, ms))
   }
 
-  private async ensureBrowser(): Promise<Browser> {
-    if (this.browser && this.browser.isConnected())
-      return this.browser
+  private resolveProxy(accountId?: string): string | undefined {
+    if (accountId && this.proxyService) {
+      const picked = this.proxyService.pickFor(accountId)
+      if (picked)
+        return picked
+    }
+    return this.config.proxy
+  }
+
+  private async ensureBrowser(proxyUrl: string | undefined, proxyKey: string): Promise<Browser> {
+    const existing = this.browsers.get(proxyKey)
+    if (existing && existing.isConnected())
+      return existing
+    if (existing) {
+      this.browsers.delete(proxyKey)
+    }
     const chromium = getStealthChromium()
-    this.browser = await chromium.launch({
+    const browser = await chromium.launch({
       headless: this.config.headless,
-      proxy: this.config.proxy ? { server: this.config.proxy } : undefined,
+      proxy: proxyUrl ? { server: proxyUrl } : undefined,
     })
-    this.logger.log(`Launched chromium (headless=${this.config.headless})`)
-    return this.browser
+    this.browsers.set(proxyKey, browser)
+    this.logger.log(
+      `Launched chromium (headless=${this.config.headless}, proxy=${proxyKey === NO_PROXY_KEY ? 'direct' : 'present'})`,
+    )
+    return browser
   }
 
   private async evictIfNeeded(): Promise<void> {

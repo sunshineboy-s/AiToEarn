@@ -32,6 +32,12 @@ export interface EngagementMiningJobData {
     authorId?: string
     authorName?: string
   }>
+  /**
+   * 当为 true 时，命中 PURCHASE_INTENT / LINK_REQUEST / PRICE_QUESTION 且
+   * `recommendedReply` 非空的 hits 会被合并到一个 ReplyToCommentsByAI 任务里
+   * 自动下发。Consumer 调度,不在 service 中循环依赖。
+   */
+  autoReply?: boolean
 }
 
 /**

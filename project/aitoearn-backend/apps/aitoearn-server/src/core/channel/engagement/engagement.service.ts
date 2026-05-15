@@ -9,6 +9,7 @@ import { FacebookService } from '../platforms/meta/facebook.service'
 import { ReplyToCommentAnswer } from './ai.dto'
 import { XhsAutomationProvider } from './automation/xhs-automation.provider'
 import { AIGenCommentDto, FavoritePostRequest, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, FollowUserRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
+import { recordEngagementAction } from './engagement.metrics'
 import { ActionResult, EngagementCapability, EngagementNotSupportedError, EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
@@ -146,78 +147,88 @@ export class EngagementService {
   }
 
   async likePost(data: LikePostRequest): Promise<ActionResult> {
-    await this.checkRelayAccount(data.accountId)
-    await this.rateLimit.assertAllowed(data.accountId, 'like')
-    const provider = this.getProvider(data.platform)
-    return this.runAction('like', data.accountId, () => provider.likePost(data.accountId, data.postId))
+    return this.executeAction('like', data.platform, data.accountId, p => p.likePost(data.accountId, data.postId))
   }
 
   async unlikePost(data: LikePostRequest): Promise<ActionResult> {
-    await this.checkRelayAccount(data.accountId)
-    await this.rateLimit.assertAllowed(data.accountId, 'unlike')
-    const provider = this.getProvider(data.platform)
-    return this.runAction('unlike', data.accountId, () => provider.unlikePost(data.accountId, data.postId))
+    return this.executeAction('unlike', data.platform, data.accountId, p => p.unlikePost(data.accountId, data.postId))
   }
 
   async favoritePost(data: FavoritePostRequest): Promise<ActionResult> {
-    await this.checkRelayAccount(data.accountId)
-    await this.rateLimit.assertAllowed(data.accountId, 'favorite')
-    const provider = this.getProvider(data.platform)
-    return this.runAction('favorite', data.accountId, () => provider.favoritePost(data.accountId, data.postId))
+    return this.executeAction('favorite', data.platform, data.accountId, p => p.favoritePost(data.accountId, data.postId))
   }
 
   async unfavoritePost(data: FavoritePostRequest): Promise<ActionResult> {
-    await this.checkRelayAccount(data.accountId)
-    await this.rateLimit.assertAllowed(data.accountId, 'unfavorite')
-    const provider = this.getProvider(data.platform)
-    return this.runAction('unfavorite', data.accountId, () => provider.unfavoritePost(data.accountId, data.postId))
+    return this.executeAction('unfavorite', data.platform, data.accountId, p => p.unfavoritePost(data.accountId, data.postId))
   }
 
   async followUser(data: FollowUserRequest): Promise<ActionResult> {
-    await this.checkRelayAccount(data.accountId)
-    await this.rateLimit.assertAllowed(data.accountId, 'follow')
-    const provider = this.getProvider(data.platform)
-    return this.runAction('follow', data.accountId, () => provider.followUser(data.accountId, data.targetUserId))
+    return this.executeAction('follow', data.platform, data.accountId, p => p.followUser(data.accountId, data.targetUserId))
   }
 
   async unfollowUser(data: FollowUserRequest): Promise<ActionResult> {
-    await this.checkRelayAccount(data.accountId)
-    await this.rateLimit.assertAllowed(data.accountId, 'unfollow')
-    const provider = this.getProvider(data.platform)
-    return this.runAction('unfollow', data.accountId, () => provider.unfollowUser(data.accountId, data.targetUserId))
+    return this.executeAction('unfollow', data.platform, data.accountId, p => p.unfollowUser(data.accountId, data.targetUserId))
   }
 
   /**
-   * Wraps a provider call with three concerns:
-   * 1) translate `EngagementNotSupportedError` to a typed AppException
-   * 2) rate-limit + circuit-breaker bookkeeping (success ↔ recordSuccess,
-   *    a non-success result counts as a failure for the breaker)
-   * 3) re-throw any other error untouched
+   * Common path for all six engagement actions. Centralised so the metrics
+   * + rate-limit + circuit-breaker + capability-translation rules stay
+   * consistent.
+   *
+   * Order of concerns:
+   *   1. relay-account check (throws RelayAccountException untouched)
+   *   2. rate-limit / breaker assertion — rejection bumps `rate_limited`
+   *   3. provider lookup
+   *   4. provider call:
+   *      - capability error → AppException + `not_supported` metric
+   *        (does NOT trip the breaker)
+   *      - thrown error     → `failure` metric + breaker increment, rethrow
+   *      - {success: true}  → `success` metric + breaker reset
+   *      - {success: false} → `failure` metric + breaker increment
    */
-  private async runAction(
+  private async executeAction(
     action: string,
+    platform: string,
     accountId: string,
-    fn: () => Promise<ActionResult>,
+    invoke: (provider: EngagementProvider) => Promise<ActionResult>,
   ): Promise<ActionResult> {
+    await this.checkRelayAccount(accountId)
+
+    try {
+      await this.rateLimit.assertAllowed(accountId, action)
+    }
+    catch (err) {
+      recordEngagementAction(platform, action, 'rate_limited')
+      throw err
+    }
+
+    const provider = this.getProvider(platform)
+
     let result: ActionResult
     try {
-      result = await fn()
+      result = await invoke(provider)
     }
     catch (err: unknown) {
       if (err instanceof EngagementNotSupportedError) {
-        // capability-related exceptions don't trip the breaker
+        recordEngagementAction(platform, action, 'not_supported')
         throw new AppException(
           ResponseCode.EngagementCapabilityUnavailable,
           { action: err.action || action, platform: err.platform },
         )
       }
+      recordEngagementAction(platform, action, 'failure')
       await this.rateLimit.recordFailure(accountId)
       throw err
     }
-    if (result.success)
+
+    if (result.success) {
+      recordEngagementAction(platform, action, 'success')
       await this.rateLimit.recordSuccess(accountId)
-    else
+    }
+    else {
+      recordEngagementAction(platform, action, 'failure')
       await this.rateLimit.recordFailure(accountId)
+    }
     return result
   }
 

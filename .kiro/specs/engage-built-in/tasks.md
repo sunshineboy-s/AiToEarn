@@ -23,6 +23,9 @@
 - [x] **T1.5** `LikePostRequestSchema` enum 扩成完整 `PlatformEnumSchema`
 - [ ] **T1.6** 单元测试覆盖路由 + 不支持平台兜底(后续 PR)
 
+> Update 2026-05-15 PM: first 20 unit tests in (rate guard, intent rules,
+> metrics counter, proxy stickiness). Route-level e2e still TBD.
+
 **验收**:Swagger 显示完整能力,Capabilities 返回正确矩阵 ✅(build 通过,e2e 待 sandbox 外验证)
 
 ---
@@ -48,8 +51,8 @@
 - [x] **T3.1** Nx app + Dockerfile (PoC)
 - [x] **T3.2** playwright-extra + stealth(带回退)
 - [x] **T3.3** BrowserPoolService LRU
-- [ ] **T3.4** CookieVault AES-256-GCM(PoC 用 file/env)
-- [ ] **T3.5** ProxyService
+- [x] **T3.4** CookieVault AES-256-GCM(2026-05-15: HKDF-derived key + 信封式负载;plain 兼容)
+- [x] **T3.5** ProxyService(2026-05-15: 静态池 + 账号粘性 done; 健康检查 follow-up)
 - [x] **T3.6** RPC 入口:**BullMQ `engagement_automation_action` 队列已落地**;NATS 后续切换
 
 ### PR-3B:小红书 Worker
@@ -70,7 +73,7 @@
 - [x] **T4.1** RateLimitGuardService:Redis Bucket(原子 INCR + EXPIRE Lua)
 - [x] **T4.2** 默认配额表(per-user override 后续接入)
 - [x] **T4.3** Circuit breaker:5 次失败 / 1h → 12h 冷却
-- [ ] **T4.4** Prometheus `engage_action_total{platform,action,result}`
+- [x] **T4.4** Prometheus `engage_action_total{platform,action,result}` _(2026-05-15: prom-client Counter wired into runAction; success/failure/not_supported/rate_limited 四类标签)_
 - [ ] **T4.5** k6 压测脚本
 
 ---
@@ -80,7 +83,7 @@
 - [x] **T5.1** `EngagementMiningService.classify`:Stage1 规则 + Stage2 LLM
 - [x] **T5.2** EngagementMiningConsumer(BullMQ)
 - [x] **T5.3** REST `/channel/engagement/mining/hits`(GET / PATCH / 同步 classify)
-- [ ] **T5.4** 与 ReplyToCommentsByAI 联动:命中 `recommendedReply` 自动写回(下一个 PR)
+- [x] **T5.4** 与 ReplyToCommentsByAI 联动:命中 `recommendedReply` 自动写回 _(2026-05-15: 通过 BullMQ EngagementMiningJobData.autoReply 标志由 consumer 触发,ModuleRef 解决循环依赖)_
 - [x] **T5.5** 词典在 `intent-rules.ts`,中英文双语,LICENSE-NOTICES 已记
 
 ---
@@ -110,4 +113,6 @@
 ## 进度速记
 
 - **2026-05-14**:Phase 3B PoC 落地、5 个 review 阻断项修复
-- **2026-05-15**:**Phase 0 + 1 + 3A + 4 + 5 + 6 全部落地**;build 通过;`xhs` 走 automation engine 的 like/unlike/favorite/unfavorite/follow/unfollow/comment/reply/search 全链路打通(等真机风控测)
+- **2026-05-15(上午)**:Phase 0 + 1 + 3A + 4 + 5 + 6 后端骨架全部落地;build 通过
+- **2026-05-15(下午,#1)**:Cookie Vault AES-256-GCM(T3.4),Brand mention 通知接入(T6.4),首批单测(T1.6 - 12 tests)
+- **2026-05-15(下午,#2)**:Prometheus `engage_action_total` 指标(T4.4),mining → ReplyToCommentsByAI 自动联动(T5.4),Proxy 服务 + 账号粘性代理(T3.5);新增 8 个单测(共 20 tests),build + vitest 全绿

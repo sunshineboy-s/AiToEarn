@@ -290,7 +290,7 @@ export class XhsService {
       this.logger.warn(`xhs:${accountId} has no cookies; proceeding anonymously (likely to fail)`)
 
     const ownerKey = `${PLATFORM}:${accountId}`
-    const { page, release } = await this.browserPool.acquire(ownerKey, cookies)
+    const { page, release } = await this.browserPool.acquire(ownerKey, cookies, { accountId })
     try {
       return await fn(page)
     }
