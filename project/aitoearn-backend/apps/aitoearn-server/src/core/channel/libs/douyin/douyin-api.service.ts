@@ -5,6 +5,8 @@ import { config } from '../../../../config'
 import {
   DouyinAccessTokenInfo,
   DouyinClientTokenInfo,
+  DouyinCommentListResponse,
+  DouyinCreateReplyResponse,
   DouyinOpenTicketInfo,
   DouyinShareSchemaOptions,
   DouyinUserInfo,
@@ -501,6 +503,225 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
       data: {
         resource_id: videoId,
       },
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Engagement (comments)
+  //
+  // Douyin Open Platform exposes:
+  //   - GET  /data/external/item/comment/list/   list comments on a video
+  //   - GET  /data/external/item/reply/list/     list replies on a comment
+  //   - POST /api/douyin/v1/video/create_comment_reply/  reply to a comment
+  //
+  // There is intentionally NO "post a top-level comment to a video" Open
+  // Platform endpoint at user scope; only reply-to-comment writes exist.
+  // The provider surface honours that — `commentOnPost` is reported as
+  // unsupported rather than spoofed.
+  //
+  // Pagination semantics: cursor (numeric string) + count, returned as
+  // `cursor` and `has_more` in the response. We map to KeysetPagination
+  // by using `after` for the next cursor.
+  //
+  // NOTE: These methods follow the same axios + structured-error pattern
+  // as the rest of this service. They have NOT been tested against a
+  // live Douyin Open Platform corp account in this repo; once a corp
+  // app with comment scopes exists, we recommend an integration smoke
+  // test before relying on the provider in production.
+  // ──────────────────────────────────────────────────────────────────
+
+  /**
+   * 列出视频下的评论
+   * GET https://open.douyin.com/data/external/item/comment/list/
+   *
+   * @param accessToken user-scoped access token
+   * @param openId      open_id of the authorising user
+   * @param itemId      douyin video item id (the post you are reading comments on)
+   * @param cursor      numeric continuation cursor; "0" for first page
+   * @param count       page size, 1..50 per docs
+   * @param sortType    0 = default (recommended), 1 = latest. Optional.
+   */
+  async listItemComments(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    cursor: string,
+    count: number,
+    sortType?: 0 | 1,
+  ): Promise<DouyinCommentListResponse> {
+    try {
+      const params: Record<string, string> = {
+        open_id: openId,
+        item_id: itemId,
+        cursor,
+        count: String(count),
+      }
+      if (sortType !== undefined) {
+        params['sort_type'] = String(sortType)
+      }
+      const messageRes = await axios.get<{
+        extra: {
+          error_code: number
+          description: string
+          sub_error_code: number
+          sub_description: string
+          logid: string
+          now: number
+        }
+        data: DouyinCommentListResponse & {
+          error_code: number
+          description: string
+        }
+      }>('https://open.douyin.com/data/external/item/comment/list/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+        params,
+      })
+      if (messageRes.data.extra.error_code !== 0) {
+        this.logger.error({
+          path: 'douyin listItemComments error',
+          data: messageRes.data,
+        })
+        throw new Error(messageRes.data.extra.description || messageRes.data.data.description)
+      }
+      return messageRes.data.data
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin listItemComments error',
+        data: error,
+      })
+      throw new Error(String(error))
+    }
+  }
+
+  /**
+   * 列出评论的回复
+   * GET https://open.douyin.com/data/external/item/reply/list/
+   *
+   * @param accessToken user-scoped access token
+   * @param openId      open_id of the authorising user
+   * @param itemId      douyin video item id (the post the comment lives on)
+   * @param commentId   the parent comment whose replies we want
+   * @param cursor      numeric continuation cursor; "0" for first page
+   * @param count       page size, 1..50 per docs
+   */
+  async listCommentReplies(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    cursor: string,
+    count: number,
+  ): Promise<DouyinCommentListResponse> {
+    try {
+      const messageRes = await axios.get<{
+        extra: {
+          error_code: number
+          description: string
+          sub_error_code: number
+          sub_description: string
+          logid: string
+          now: number
+        }
+        data: DouyinCommentListResponse & {
+          error_code: number
+          description: string
+        }
+      }>('https://open.douyin.com/data/external/item/reply/list/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+        params: {
+          open_id: openId,
+          item_id: itemId,
+          comment_id: commentId,
+          cursor,
+          count: String(count),
+        },
+      })
+      if (messageRes.data.extra.error_code !== 0) {
+        this.logger.error({
+          path: 'douyin listCommentReplies error',
+          data: messageRes.data,
+        })
+        throw new Error(messageRes.data.extra.description || messageRes.data.data.description)
+      }
+      return messageRes.data.data
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin listCommentReplies error',
+        data: error,
+      })
+      throw new Error(String(error))
+    }
+  }
+
+  /**
+   * 回复评论
+   * POST https://open.douyin.com/api/douyin/v1/video/create_comment_reply/
+   *
+   * Body: { item_id, comment_id, content }
+   *
+   * @param accessToken user-scoped access token
+   * @param openId      open_id of the authorising user (passed as query param per docs)
+   * @param itemId      douyin video item id the comment lives on
+   * @param commentId   the comment we are replying to
+   * @param content     reply text
+   */
+  async createCommentReply(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    content: string,
+  ): Promise<DouyinCreateReplyResponse> {
+    try {
+      const messageRes = await axios.post<{
+        extra: {
+          error_code: number
+          description: string
+          sub_error_code: number
+          sub_description: string
+          logid: string
+          now: number
+        }
+        data: DouyinCreateReplyResponse & {
+          error_code: number
+          description: string
+        }
+      }>('https://open.douyin.com/api/douyin/v1/video/create_comment_reply/', {
+        item_id: itemId,
+        comment_id: commentId,
+        content,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+        params: {
+          open_id: openId,
+        },
+      })
+      if (messageRes.data.extra.error_code !== 0) {
+        this.logger.error({
+          path: 'douyin createCommentReply error',
+          data: messageRes.data,
+        })
+        throw new Error(messageRes.data.extra.description || messageRes.data.data.description)
+      }
+      return messageRes.data.data
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin createCommentReply error',
+        data: error,
+      })
+      throw new Error(String(error))
     }
   }
 }

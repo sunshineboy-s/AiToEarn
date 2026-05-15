@@ -73,6 +73,48 @@ export interface DouyinShareSchemaOptions {
   video_path?: string
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Engagement (comments)
+//
+// Shapes mirror Douyin Open Platform documentation for
+//   /data/external/item/comment/list/
+//   /data/external/item/reply/list/
+//   /api/douyin/v1/video/create_comment_reply/
+// Field set kept conservative: only what we actually consume in
+// `DouyinEngagementProvider`. Extend as needed.
+// ──────────────────────────────────────────────────────────────────
+
+export interface DouyinCommentItem {
+  comment_id: string
+  comment_user_id: string // open_id of the commenter (encrypted)
+  content: string
+  create_time: number // unix seconds
+  digg_count: number
+  reply_comment_total: number
+  /** Optional, present in some response variants */
+  nickname?: string
+  /** Optional, present in some response variants */
+  avatar?: string
+  /** Optional reply target — set on entries returned by item/reply/list */
+  reply_id?: string
+  reply_user_id?: string
+  top?: boolean
+}
+
+export interface DouyinCommentListResponse {
+  cursor: number
+  has_more: boolean
+  list: DouyinCommentItem[]
+  /** Sometimes present at data level for non-extra error reporting */
+  description?: string
+}
+
+export interface DouyinCreateReplyResponse {
+  comment_id: string
+  /** Sometimes present at data level for non-extra error reporting */
+  description?: string
+}
+
 /**
  * 获取中文文件的URL
  * @param url

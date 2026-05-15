@@ -483,6 +483,94 @@ export class DouyinService extends PlatformBaseService {
   }
 
   /**
+   * 获取账户对应的 open_id
+   * Open Platform 评论相关接口都要求随请求带上 open_id（uid 即 open_id）。
+   */
+  private async getAccountOpenId(accountId: string): Promise<string> {
+    const account
+      = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account || account.type !== AccountType.Douyin) {
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    }
+    if (!account.uid) {
+      // Defensive: every douyin account is created with uid = open_id;
+      // a missing uid here means the row was tampered with.
+      this.logger.error({
+        path: 'douyin getAccountOpenId missing uid',
+        accountId,
+      })
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    }
+    return account.uid
+  }
+
+  /**
+   * 列出视频下的评论
+   * @param accountId  本平台 account id
+   * @param itemId     抖音 video item id
+   * @param cursor     连续游标，首次传 "0"
+   * @param count      每页条数（1..50）
+   */
+  async listItemComments(
+    accountId: string,
+    itemId: string,
+    cursor: string,
+    count: number,
+  ) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.getAccountOpenId(accountId)
+    return await this.douyinApiService.listItemComments(
+      accessToken,
+      openId,
+      itemId,
+      cursor,
+      count,
+    )
+  }
+
+  /**
+   * 列出某条评论的回复
+   */
+  async listCommentReplies(
+    accountId: string,
+    itemId: string,
+    commentId: string,
+    cursor: string,
+    count: number,
+  ) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.getAccountOpenId(accountId)
+    return await this.douyinApiService.listCommentReplies(
+      accessToken,
+      openId,
+      itemId,
+      commentId,
+      cursor,
+      count,
+    )
+  }
+
+  /**
+   * 回复评论
+   */
+  async createCommentReply(
+    accountId: string,
+    itemId: string,
+    commentId: string,
+    content: string,
+  ) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.getAccountOpenId(accountId)
+    return await this.douyinApiService.createCommentReply(
+      accessToken,
+      openId,
+      itemId,
+      commentId,
+      content,
+    )
+  }
+
+  /**
    * 删除稿件
    * @param accountId
    * @param postId
