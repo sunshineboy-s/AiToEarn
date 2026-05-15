@@ -63,3 +63,93 @@ export interface XianyuRelayPublishResult {
   workLink: string
   status: XianyuItemDetail['status']
 }
+
+/* ============================================================
+ *  Data-Cube / Engagement 数据结构
+ *  ----------------------------------------------------------
+ *  闲鱼本地 OAuth 账号没有可用接口，下面所有结构仅在 Relay 通路
+ *  下被填充；本地账号一律返回零值或空列表，写操作抛错。
+ * ============================================================ */
+
+/** 账号维度统计（Relay 接口 GET /xianyu/account/stats 的契约） */
+export interface XianyuAccountStats {
+  /** 在售商品数 */
+  onSaleCount: number
+  /** 累计上架商品数 */
+  totalItemCount: number
+  /** 粉丝数（关注我的人） */
+  followersCount: number
+  /** 浏览总数（PV） */
+  viewCount: number
+  /** 点赞总数（"我想要"） */
+  likeCount: number
+  /** 评论 / 私信回复总数 */
+  commentCount: number
+  /** 收藏 / "我也想要" 总数 */
+  favoriteCount: number
+}
+
+/** 商品维度统计（Relay 接口 GET /xianyu/items/:id/stats） */
+export interface XianyuItemStats {
+  itemId: string
+  viewCount: number
+  likeCount: number
+  commentCount: number
+  favoriteCount: number
+  shareCount: number
+  /** 想要次数（"我也要"按钮） */
+  wantCount: number
+}
+
+/** 闲鱼"留言"（评论的对应概念） */
+export interface XianyuMessage {
+  /** 留言 ID */
+  id: string
+  /** 商品 ID */
+  itemId: string
+  /** 留言内容 */
+  content: string
+  /** 留言时间，ISO 字符串 */
+  createdAt: string
+  /** 留言用户 */
+  author: {
+    userId: string
+    nickname: string
+    avatar?: string
+  }
+  /** 是否为 sub-thread（回复某条留言） */
+  parentId?: string
+  hasReplies?: boolean
+}
+
+/** Relay 拉留言列表的响应 */
+export interface XianyuMessagesPage {
+  list: XianyuMessage[]
+  nextCursor?: string
+}
+
+/** Relay 列表商品（feed）的响应 */
+export interface XianyuItemSummary {
+  itemId: string
+  title: string
+  price: number
+  imageUrls: string[]
+  workLink: string
+  status: XianyuItemDetail['status']
+  publishTime?: string
+  viewCount?: number
+  likeCount?: number
+  commentCount?: number
+  favoriteCount?: number
+}
+
+export interface XianyuItemsPage {
+  list: XianyuItemSummary[]
+  nextCursor?: string
+}
+
+/** Relay 发表评论 / 回复 留言 的响应 */
+export interface XianyuPublishMessageResult {
+  /** 新留言 ID */
+  id: string
+}

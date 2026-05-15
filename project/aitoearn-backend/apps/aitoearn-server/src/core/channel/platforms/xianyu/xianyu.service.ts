@@ -4,7 +4,12 @@ import { AppException, ResponseCode } from '@yikart/common'
 import { RelayClientService } from '../../../relay/relay-client.service'
 import { PlatformBaseService, WorkDetailInfo } from '../base.service'
 import {
+  XianyuAccountStats,
   XianyuItemDetail,
+  XianyuItemsPage,
+  XianyuItemStats,
+  XianyuMessagesPage,
+  XianyuPublishMessageResult,
   XianyuRelayPublishPayload,
   XianyuRelayPublishResult,
 } from './xianyu.interfaces'
@@ -192,5 +197,183 @@ export class XianyuService extends PlatformBaseService {
     }
 
     return null
+  }
+
+  /* ============================================================
+   *  Data-Cube：账号 / 商品 维度统计
+   *  ----------------------------------------------------------
+   *  Relay 账号 -> 通过 RelayClient 拉真实数据；
+   *  本地 OAuth 账号 -> 一律返回 0，不抛错（datacube 是只读接口，不应阻塞 UI）。
+   * ============================================================ */
+
+  /**
+   * 拉账号维度统计。本地账号返回零值。
+   */
+  async getAccountStats(accountId: string): Promise<XianyuAccountStats> {
+    const empty: XianyuAccountStats = {
+      onSaleCount: 0,
+      totalItemCount: 0,
+      followersCount: 0,
+      viewCount: 0,
+      likeCount: 0,
+      commentCount: 0,
+      favoriteCount: 0,
+    }
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef || !this.relayClientService.enabled) {
+      return empty
+    }
+    try {
+      return await this.relayClientService.get<XianyuAccountStats>(
+        '/xianyu/account/stats',
+        { accountId: account.relayAccountRef },
+      )
+    }
+    catch (err) {
+      this.logger.warn(`relay xianyu getAccountStats failed: ${(err as Error).message}`)
+      return empty
+    }
+  }
+
+  /**
+   * 拉商品维度统计。本地账号返回零值。
+   */
+  async getItemStats(accountId: string, itemId: string): Promise<XianyuItemStats> {
+    const empty: XianyuItemStats = {
+      itemId,
+      viewCount: 0,
+      likeCount: 0,
+      commentCount: 0,
+      favoriteCount: 0,
+      shareCount: 0,
+      wantCount: 0,
+    }
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef || !this.relayClientService.enabled) {
+      return empty
+    }
+    try {
+      return await this.relayClientService.get<XianyuItemStats>(
+        `/xianyu/items/${encodeURIComponent(itemId)}/stats`,
+        { accountId: account.relayAccountRef },
+      )
+    }
+    catch (err) {
+      this.logger.warn(`relay xianyu getItemStats failed: ${(err as Error).message}`)
+      return empty
+    }
+  }
+
+  /* ============================================================
+   *  Engagement：商品列表 / 留言（评论）/ 回复
+   *  ----------------------------------------------------------
+   *  闲鱼把"评论"叫做"留言/我也要"，结构上和 IG/FB 评论非常接近。
+   *  本地 OAuth 账号一律返回空列表；写操作（发表 / 回复）抛错。
+   * ============================================================ */
+
+  /**
+   * 拉账号下的商品列表（按发布时间倒序），用于 engagement 选作品。
+   */
+  async listItems(accountId: string, cursor?: string, limit = 50): Promise<XianyuItemsPage> {
+    const empty: XianyuItemsPage = { list: [], nextCursor: undefined }
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef || !this.relayClientService.enabled) {
+      return empty
+    }
+    try {
+      return await this.relayClientService.get<XianyuItemsPage>('/xianyu/items', {
+        accountId: account.relayAccountRef,
+        cursor: cursor || '',
+        limit,
+      })
+    }
+    catch (err) {
+      this.logger.warn(`relay xianyu listItems failed: ${(err as Error).message}`)
+      return empty
+    }
+  }
+
+  /**
+   * 拉商品下的留言列表。
+   */
+  async listItemMessages(accountId: string, itemId: string, cursor?: string, limit = 50): Promise<XianyuMessagesPage> {
+    const empty: XianyuMessagesPage = { list: [], nextCursor: undefined }
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef || !this.relayClientService.enabled) {
+      return empty
+    }
+    try {
+      return await this.relayClientService.get<XianyuMessagesPage>(
+        `/xianyu/items/${encodeURIComponent(itemId)}/messages`,
+        {
+          accountId: account.relayAccountRef,
+          cursor: cursor || '',
+          limit,
+        },
+      )
+    }
+    catch (err) {
+      this.logger.warn(`relay xianyu listItemMessages failed: ${(err as Error).message}`)
+      return empty
+    }
+  }
+
+  /**
+   * 拉某条留言下的子回复。
+   */
+  async listMessageReplies(accountId: string, messageId: string, cursor?: string, limit = 50): Promise<XianyuMessagesPage> {
+    const empty: XianyuMessagesPage = { list: [], nextCursor: undefined }
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef || !this.relayClientService.enabled) {
+      return empty
+    }
+    try {
+      return await this.relayClientService.get<XianyuMessagesPage>(
+        `/xianyu/messages/${encodeURIComponent(messageId)}/replies`,
+        {
+          accountId: account.relayAccountRef,
+          cursor: cursor || '',
+          limit,
+        },
+      )
+    }
+    catch (err) {
+      this.logger.warn(`relay xianyu listMessageReplies failed: ${(err as Error).message}`)
+      return empty
+    }
+  }
+
+  /**
+   * 在商品下发表新留言（在 IG/FB 模型里相当于 commentOnPost）。
+   */
+  async publishItemMessage(accountId: string, itemId: string, content: string): Promise<XianyuPublishMessageResult> {
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef) {
+      throw new AppException(ResponseCode.XianyuOAuthUnsupported)
+    }
+    if (!this.relayClientService.enabled) {
+      throw new AppException(ResponseCode.RelayServerUnavailable)
+    }
+    return this.relayClientService.post<XianyuPublishMessageResult>(
+      `/xianyu/items/${encodeURIComponent(itemId)}/messages`,
+      { accountId: account.relayAccountRef, content },
+    )
+  }
+
+  /**
+   * 回复已有留言（相当于 replyToComment）。
+   */
+  async replyToItemMessage(accountId: string, messageId: string, content: string): Promise<XianyuPublishMessageResult> {
+    const account = await this.accountRepository.getById(accountId)
+    if (!account?.relayAccountRef) {
+      throw new AppException(ResponseCode.XianyuOAuthUnsupported)
+    }
+    if (!this.relayClientService.enabled) {
+      throw new AppException(ResponseCode.RelayServerUnavailable)
+    }
+    return this.relayClientService.post<XianyuPublishMessageResult>(
+      `/xianyu/messages/${encodeURIComponent(messageId)}/replies`,
+      { accountId: account.relayAccountRef, content },
+    )
   }
 }

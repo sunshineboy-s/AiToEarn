@@ -8,6 +8,7 @@ import { ChannelAccountService } from '../platforms/channel-account.service'
 import { BilibiliDataService } from './bilibili-data.service'
 import { DataCubeBase } from './data.base'
 import { WxGzhDataService } from './wx-gzh-data.service'
+import { XianyuDataService } from './xianyu-data.service'
 import { YoutubeDataService } from './youtube-data.service'
 
 @ApiTags('Data/DataCube')
@@ -20,17 +21,22 @@ export class DataCubeController {
     readonly bilibiliDataService: BilibiliDataService,
     readonly youtubeDataService: YoutubeDataService,
     readonly wxGzhDataService: WxGzhDataService,
+    readonly xianyuDataService: XianyuDataService,
   ) {
     this.dataCubeMap.set(AccountType.BILIBILI, bilibiliDataService)
     this.dataCubeMap.set(AccountType.YOUTUBE, youtubeDataService)
     this.dataCubeMap.set(AccountType.WxGzh, wxGzhDataService)
+    this.dataCubeMap.set(AccountType.XIANYU, xianyuDataService)
   }
 
   private async getDataCube(accountId: string) {
     const account = await this.channelAccountService.getAccountInfo(accountId)
     if (!account)
       throw new AppException(ResponseCode.ChannelAccountNotFound)
-    if (account.relayAccountRef) {
+    // 闲鱼例外：本地 OAuth 账号也支持 datacube（返回零值），
+    // 所以不能因为有 relayAccountRef 就一刀切抛 RelayAccountException。
+    // 闲鱼的 service 内部已经把 relay/local 的差异处理掉。
+    if (account.relayAccountRef && account.type !== AccountType.XIANYU) {
       throw new RelayAccountException(account.relayAccountRef, accountId)
     }
     const dataCube = this.dataCubeMap.get(account.type)
