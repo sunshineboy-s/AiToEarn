@@ -77,7 +77,41 @@ export class YoutubePubService extends PublishService {
       const chunkSize = 1024 * 1024 * 5
       const chunkCount = Math.ceil(contentLength / chunkSize)
 
+      /*
+       * 断点续传：每个分片上传前先查一下服务端 offset。
+       *   - completed 直接拿 videoId 走人；
+       *   - incomplete 跳到 uploadedBytes 对应的分片继续；
+       *   - expired 不重试（uploadToken 已经废了，需要重新 init —— 这种情况
+       *     由上层 publishing 任务调度重新发起）；
+       * 这能解决：worker 进程重启 / 网络长暂停 / 5xx 临时异常之后从断点恢复，
+       * 而不是从 part 1 开始重跑整段下载+上传。
+       */
+      let resourceId: string | false = false
       for (let seq = 1; seq <= chunkCount; seq++) {
+        // 进入每片之前，先问一下服务端：你已经收到多少字节了？
+        const status = await this.youtubeService.queryUploadStatus(
+          publishTask.accountId,
+          videoUpToken,
+          contentLength,
+        )
+        if (status.state === 'completed') {
+          resourceId = status.videoId
+          break
+        }
+        if (status.state === 'expired') {
+          throw PublishingException.nonRetryable('youtube upload session expired, must re-init')
+        }
+        if (status.state === 'incomplete') {
+          // 把"已收到的字节数"换算成下一个要传的分片序号（1-based）。
+          // chunk N 覆盖 [(N-1)*chunkSize, N*chunkSize)，所以 N = floor(uploadedBytes/chunkSize) + 1。
+          const nextSeq = Math.floor(status.uploadedBytes / chunkSize) + 1
+          if (nextSeq > seq) {
+            this.logger.log(`[youtube] resume: server has ${status.uploadedBytes} bytes, skipping to part ${nextSeq}`)
+            seq = nextSeq - 1 // -1 because for-loop ++
+            continue
+          }
+        }
+
         const start = (seq - 1) * chunkSize
         const end = Math.min(seq * chunkSize - 1, contentLength - 1)
         const chunkFile = await chunkedDownloadFile(publishTask.videoUrl, [start, end])
@@ -86,13 +120,19 @@ export class YoutubePubService extends PublishService {
           chunkFile,
           videoUpToken,
           seq,
+          contentLength, // 关键修复：传入真实总大小，最后一片才能被服务端以 200 终结
         )
       }
-      const resourceId = await this.youtubeService.videoComplete(
-        publishTask.accountId,
-        videoUpToken,
-        contentLength,
-      )
+
+      // 如果上面循环里没有提前拿到 videoId（最后一片返回 200 + body.id 走 queryUploadStatus 没观察到），
+      // 走显式 complete 兜底。
+      if (!resourceId) {
+        resourceId = await this.youtubeService.videoComplete(
+          publishTask.accountId,
+          videoUpToken,
+          contentLength,
+        )
+      }
       if (!resourceId) {
         this.logger.error('error completing video upload')
         throw PublishingException.nonRetryable('error completing video upload')
