@@ -337,6 +337,15 @@ If you run into usage difficulties, questions, or unexpected behavior, please op
 
 ## Recommended
 
+> 🎯 **Recommended combo**: Use [Anything → NotebookLM](https://github.com/joeseesun/qiaomu-anything-to-notebooklm) (15+ content sources / 300+ paywall bypass / convert to podcast · slides · mind map · quiz) as the **input side** for AiToEarn Create. With both tools loaded in Claude Code / Cursor, a single prompt covers the full "read → remix → distribute" loop:
+>
+> ```text
+> > Turn this WSJ article into a mind map, then publish it to my LinkedIn and X.
+> 1) Anything → NotebookLM: bypass paywall → fetch article → mind map
+> 2) AiToEarn: one-click publish to LinkedIn + X ✅
+> ```
+
+- [Anything → NotebookLM](https://github.com/joeseesun/qiaomu-anything-to-notebooklm) — Multi-source content fetcher (WeChat / podcasts / YouTube / paywalled news / PDF / EPUB...) + one-click conversion to podcast / slides / mind map / quiz
 - [MuseTalk](https://github.com/TMElyralab/MuseTalk)
 - [video_spider](https://github.com/5ime/video_spider)
 - [CosyVoice](https://github.com/FunAudioLLM/CosyVoice?tab=readme-ov-file)

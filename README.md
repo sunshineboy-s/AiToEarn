@@ -343,6 +343,16 @@ Electron 项目为 AiToEarn 提供桌面客户端。
 <img src="presentation/wechat.jpg" alt="微信二维码" width="200">
 
 ## 推荐
+
+> 🎯 **推荐组合**：把 [Anything → NotebookLM](https://github.com/joeseesun/qiaomu-anything-to-notebooklm)（15+ 内容源解析 / 300+ 付费墙绕过 / 转播客·PPT·思维导图·Quiz）当作 AiToEarn Create 的"输入端"。在 Claude Code / Cursor 里同时挂上这两个工具，一句话打通"读到 → 二创 → 分发"：
+>
+> ```text
+> > 把这篇 WSJ 文章做成思维导图，再发到我的小红书和 LinkedIn
+> 1) Anything → NotebookLM：绕过付费墙 → 抓取正文 → 生成思维导图
+> 2) AiToEarn：一键发布到小红书 + LinkedIn ✅
+> ```
+
+- [Anything → NotebookLM](https://github.com/joeseesun/qiaomu-anything-to-notebooklm) — 多源内容抓取（公众号 / 小宇宙 / YouTube / 付费墙文章 / PDF / EPUB...）+ 一键转播客 / PPT / 思维导图 / Quiz
 - [AI中转站](https://aihubmix.com/?aff=hWRL)
 - [AtomGit托管](https://atomgit.com/yikart/AitoEarn)
 - [MuseTalk](https://github.com/TMElyralab/MuseTalk)
