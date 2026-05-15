@@ -32,6 +32,7 @@ import {
 } from 'src/db/schema/account.schema';
 import { CreateXianyuItemDto, XianyuItemFilterDto } from './dto/xianyu.dto';
 import { XianyuItem, XianyuLoginContext } from './comment';
+import { uploadImageUrlToTaobaoCDN } from './image-uploader';
 import {
   callMtop,
   MtopBusinessError,
@@ -104,10 +105,14 @@ export class XianyuService {
   /**
    * 发布商品。
    *
-   * 注意：闲鱼发布通常要求图片是淘系 CDN 的 imageId（h5 上传得到），不能直接吃外链 URL。
-   * 如果传入的是外链，闲鱼网关会返回 `FAIL_BIZ_PIC_NEED_UPLOAD`。这种情况下调用方
-   * 需要先把图片上传到淘系 CDN（通过 mtop.taobao.litegw.image.upload 或主进程
-   * 用 BrowserWindow 复用页面 fetch 上传），拿到 imageId 后再调本接口。
+   * 流程：
+   *   1. 校验账号 / dto；
+   *   2. 把外链图片逐张上传到淘系 CDN，得到 imageId 数组；
+   *   3. 用 imageId 数组调 mtop.idle.user.publish.publish；
+   *   4. 全程刷新到的 _m_h5_tk 都回写到 Account.loginCookie。
+   *
+   * 为什么不能跳过第 2 步：闲鱼商品发布的 `images` 字段不接受任意外链 URL，
+   * 服务端会回 `FAIL_BIZ_PIC_NEED_UPLOAD`。所以这里必做"中转上传"。
    */
   async publishItem(
     accountId: string,
@@ -125,18 +130,46 @@ export class XianyuService {
       throw new BadRequestException('price 与 reservePrice 不能同时为空');
     }
 
+    // 1) 把外链图逐张上传到淘系 CDN，拿 imageId 数组。
+    //    - 顺序串行：mtop 网关同账号并发限制比较严，并行容易触发限流；
+    //    - cookie 每次 upload 都可能被刷新，所以中间 mutate 一个 currentCookie。
+    let currentCookie = account.loginCookie;
+    const imageIds: string[] = [];
+    for (let i = 0; i < dto.imgUrlList.length; i++) {
+      const imgUrl = dto.imgUrlList[i];
+      try {
+        const result = await uploadImageUrlToTaobaoCDN(
+          this.httpService,
+          currentCookie,
+          imgUrl,
+          { logger: this.logger },
+        );
+        imageIds.push(result.imageId);
+        if (result.updatedCookie) {
+          currentCookie = result.updatedCookie;
+        }
+      } catch (err) {
+        const msg = (err as Error).message;
+        this.logger.warn(
+          `[xianyu] image ${i + 1}/${dto.imgUrlList.length} upload failed: ${msg}`,
+        );
+        throw new BadRequestException(`闲鱼图片 ${i + 1} 上传失败：${msg}`);
+      }
+    }
+    // 把 cookie 刷新结果一次性回写
+    if (currentCookie !== account.loginCookie) {
+      await this.persistUpdatedCookie(account, currentCookie);
+      account.loginCookie = currentCookie; // 后面 publish 调用要复用
+    }
+
     /*
      * mtop.idle.user.publish.publish 的字段名以闲鱼网页 F12 抓包为准。
      * 已知必填：title / content / images / price / stuffStatus
      * 已知可选：reservePrice / freeShipping / catId / fishpondId / videoId
-     *
-     * NOTE: images 在闲鱼真实接口里期望的是 imageId 数组；外链图需要先经过
-     * 淘系 CDN 上传。本骨架先按外链传过去，让后端报 PIC_NEED_UPLOAD 给上层
-     * 触发上传逻辑（待补）。
      */
     const requestBody: Record<string, unknown> = {
       version: '4.0',
-      images: dto.imgUrlList,
+      images: imageIds,
       title: dto.title,
       content: dto.desc ?? '',
       stuffStatus: dto.stuffStatus ?? 2,
