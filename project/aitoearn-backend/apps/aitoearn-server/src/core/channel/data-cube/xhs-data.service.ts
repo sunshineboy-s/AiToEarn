@@ -7,7 +7,7 @@ import { DataCubeBase } from './data.base'
 
 @Injectable()
 export class XhsDataService extends DataCubeBase {
-  private readonly logger = new Logger(XiaohongshuService.name)
+  private readonly logger = new Logger(XhsDataService.name)
   constructor(
     readonly xhsService: XiaohongshuService,
     private readonly accountRepository: AccountRepository,

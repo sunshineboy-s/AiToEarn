@@ -1,9 +1,39 @@
 import { createZodDto, KeysetPaginationSchema, OffsetPaginationSchema } from '@yikart/common'
 import { z } from 'zod'
 
+/**
+ * 单一来源的平台 z.enum，给所有 engagement DTO 复用。
+ *
+ * 之前同一个列表在本文件里被原样复制了 8 次；新增平台时漏改一处就会
+ * 在运行时被 zod 拒掉、编译器捕获不到。集中到这里之后，新平台只需
+ * 在这一个数组里加一项。
+ *
+ * 注意：本枚举要和 `libs/common/src/enums/account-type.enum.ts` 的
+ * `AccountType` 保持一致。增加新平台的 PR 必须同时改两边。
+ */
+const ENGAGEMENT_PLATFORMS = [
+  'facebook',
+  'instagram',
+  'threads',
+  'twitter',
+  'youtube',
+  'tiktok',
+  'bilibili',
+  'douyin',
+  'KWAI',
+  'xhs',
+  'linkedin',
+  'wxGzh',
+  'pinterest',
+] as const
+
+export const platformEnum = z.enum(ENGAGEMENT_PLATFORMS, { message: 'platform is required' })
+
+export type EngagementPlatform = z.infer<typeof platformEnum>
+
 export const fetchPostsRequestSchema = z.object({
   accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest'], { message: 'platform is required' }).describe('平台'),
+  platform: platformEnum.describe('平台'),
   after: z.string().nullish().describe('后一页游标'),
   before: z.string().nullish().describe('前一页游标'),
   pagination: z.union([KeysetPaginationSchema, OffsetPaginationSchema]).nullish().describe('分页参数'),
@@ -11,28 +41,28 @@ export const fetchPostsRequestSchema = z.object({
 
 export const fetchPostCommentsRequestSchema = z.object({
   accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest'], { message: 'platform is required' }).describe('平台'),
+  platform: platformEnum.describe('平台'),
   postId: z.string().describe('作品ID'),
   pagination: z.union([KeysetPaginationSchema, OffsetPaginationSchema]).nullish().describe('分页参数'),
 })
 
 export const fetchCommentRepliesSchema = z.object({
   accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest'], { message: 'platform is required' }).describe('平台'),
+  platform: platformEnum.describe('平台'),
   commentId: z.string().describe('评论ID'),
   pagination: z.union([KeysetPaginationSchema, OffsetPaginationSchema]).nullish().describe('分页参数'),
 })
 
 export const PublishCommentRequestSchema = z.object({
   accountId: z.string().describe('账号ID'),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest'], { message: 'platform is required' }).describe('平台'),
+  platform: platformEnum.describe('平台'),
   postId: z.string().describe('作品ID'),
   message: z.string().min(1).max(500).describe('评论内容, 最大500字符'),
 })
 
 export const publishCommentReplyRequestSchema = z.object({
   accountId: z.string().describe('账号ID'),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest'], { message: 'platform is required' }).describe('平台'),
+  platform: platformEnum.describe('平台'),
   commentId: z.string().describe('评论ID'),
   message: z.string().min(1).max(500).describe('评论内容, 最大500字符'),
 })
@@ -55,7 +85,7 @@ export const ReplyToCommentsSchema = z.object({
   userId: z.string().describe('用户ID'),
   postId: z.string().describe('作品ID'),
   prompt: z.string().min(1).max(500).optional().describe('提示语, 最大500字符'),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest']).describe('平台'),
+  platform: platformEnum.describe('平台'),
   model: z.string().describe('AI模型名称, 例如:gpt-3.5-turbo, gpt-4'),
   comments: z.array(CommentSchema).optional().describe('评论列表'),
 })
@@ -80,7 +110,7 @@ export class ReplyToCommentsDto extends createZodDto(ReplyToCommentsSchema) {}
 export class AIGenCommentDto extends createZodDto(AIGenCommentSchema) {}
 
 export const FetchMetaPostsRequestSchema = z.object({
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest'], { message: 'platform is required' }).describe('平台'),
+  platform: platformEnum.describe('平台'),
   accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
   after: z.string().nullish().describe('后一页游标'),
   before: z.string().nullish().describe('前一页游标'),
