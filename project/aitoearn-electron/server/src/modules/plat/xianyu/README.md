@@ -71,16 +71,19 @@ const XIANYU_API = {
 
 ### 5. 把 `data` 字段抄到 service 的 `requestBody`
 
-注意闲鱼的 `images` 字段**通常是 imageId（淘系 CDN 上传后得到）**，
-不是外链 URL。如果你直接传外链，会收到：
+闲鱼的 `images` 字段**通常是 imageId（淘系 CDN 上传后得到）**，不是外链 URL。
+本模块的 `image-uploader.ts` 已经实现了"先把外链下载成 Buffer，再走
+`mtop.taobao.litegw.image.upload` 上传到淘系 CDN 拿 imageId"的中转上传，
+`publishItem` 在调发布前会自动做这一步。
+
+如果你看到：
 
 ```
 ret: ["FAIL_BIZ_PIC_NEED_UPLOAD::图片需先上传到淘系 CDN"]
 ```
 
-这种情况下需要先调 `mtop.taobao.litegw.image.upload` 上传，或者在
-主进程让 BrowserWindow 复用已登录页面跑 `fetch` 上传，把返回的
-imageId 填到 `images` 数组里。
+说明上传步骤被绕过了（比如直接调了 mtop publish 接口）。`publishItem` 走完
+正常流程不会触发这个错误。
 
 ## sign 算法（mtop h5）
 
