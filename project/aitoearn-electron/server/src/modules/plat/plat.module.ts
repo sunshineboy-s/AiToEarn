@@ -12,8 +12,9 @@ import { GoogleModule } from './google/google.module';
 import { YoutubeModule } from './youtube/youtube.module';
 import { TwitterModule } from './twitter/twitter.module';
 import { TiktokModule } from './tiktok/tiktok.module';
+import { XianyuModule } from './xianyu/xianyu.module';
 
 @Module({
-  imports: [BilibiliModule, GzhModule, GoogleModule, YoutubeModule, TwitterModule, TiktokModule],
+  imports: [BilibiliModule, GzhModule, GoogleModule, YoutubeModule, TwitterModule, TiktokModule, XianyuModule],
 })
 export class PlatModule {}

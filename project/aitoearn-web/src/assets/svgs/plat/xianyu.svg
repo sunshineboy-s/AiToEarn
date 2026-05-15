@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="xianyuGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD83A"/>
+      <stop offset="100%" stop-color="#FFB400"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#xianyuGrad)"/>
+  <!-- Stylised fish silhouette -->
+  <path fill="#fff" d="M14 32c0-7.7 7.4-13 16-13 5.5 0 10.4 2.2 13.4 5.6l5.4-3.7c.9-.6 2.1.1 2 1.2L49 28.6c1 1 1.7 2.2 1.7 3.4 0 1.2-.7 2.4-1.7 3.4l1.8 6.5c.3 1.1-.9 2-1.9 1.4L43.4 39.4C40.4 42.8 35.5 45 30 45c-8.6 0-16-5.3-16-13zm22 0a3 3 0 1 0-6 0 3 3 0 0 0 6 0z"/>
+  <!-- Letter X bubble -->
+  <circle cx="44" cy="20" r="6" fill="#fff" opacity=".85"/>
+  <text x="44" y="23" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="9" fill="#FF8A00" font-weight="900">X</text>
+</svg>
