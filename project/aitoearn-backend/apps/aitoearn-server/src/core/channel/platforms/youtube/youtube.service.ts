@@ -1055,27 +1055,37 @@ export class YoutubeService extends PlatformBaseService {
     file: Buffer,
     uploadToken: string,
     partNumber: number,
+    /**
+     * 视频文件总大小。如果不传，Content-Range 会用 `bytes start-end/*`，
+     * 而 YouTube 不会在最后一片返回 200 OK（永远停在 308），导致 videoComplete
+     * 必须再发一次终结请求。**强烈建议传入** —— 这是个真 bug 修复。
+     */
+    totalSize?: number,
   ) {
     const accessToken = await this.getUserAccessToken(accountId)
     if (!accessToken)
       throw new AppException(ResponseCode.ChannelAccessTokenFailed, { accountId })
 
     try {
-      const chunkSize = 5 * 1024 * 1024 // 每个分片1MB
+      const chunkSize = 5 * 1024 * 1024 // 每个分片5MB（注释里的"1MB"是错的）
       // 计算当前分片的字节范围  parNumber 是从1开始
       const contentLength = file.length
       const startByte = (partNumber - 1) * chunkSize
       const endByte = startByte + contentLength - 1
+      const totalRange = totalSize !== undefined && totalSize > 0 ? String(totalSize) : '*'
 
-      this.logger.log(`Uploading part ${partNumber} with range: ${startByte}-${endByte}, contentLength: ${contentLength}`)
+      this.logger.log(`Uploading part ${partNumber} with range: ${startByte}-${endByte}/${totalRange}, contentLength: ${contentLength}`)
       // 发送分片上传请求
       const response = await axios.put(uploadToken, file, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/octet-stream',
           'Content-Length': contentLength.toString(),
-          'Content-Range': `bytes ${startByte}-${endByte}/*`, // 表示分片范围，*表示文件总大小未知
+          'Content-Range': `bytes ${startByte}-${endByte}/${totalRange}`,
         },
+        // 308 是 YouTube 用来表示"分片已收到，继续传"的正常状态码，
+        // axios 默认会把它当成 error，所以放开 validateStatus 让 308 也走 success 分支
+        validateStatus: status => (status >= 200 && status < 300) || status === 308,
       })
       // 将headers转换为普通对象，避免返回RawAxiosHeaders类型
       const plainHeaders = response.headers ? { ...response.headers } : {}
@@ -1139,6 +1149,85 @@ export class YoutubeService extends PlatformBaseService {
       this.logger.log('Error completing video upload:', error)
       // return `完成视频上传失败: ${error.message}`
       return false
+    }
+  }
+
+  /**
+   * 查询断点续传上传的当前进度。
+   *
+   * YouTube resumable upload 协议：发一个空体 PUT 请求 with `Content-Range: bytes *\/{totalSize}`，
+   * 服务端会返回：
+   *   - 308 + `Range: bytes=0-N`：已收到 N+1 字节，下一个分片从 offset N+1 开始；
+   *   - 200/201：上传已完成，body.id 是 videoId；
+   *   - 404/410：uploadToken 失效，必须重新 init。
+   *
+   * 用途：网络中断后恢复上传 / 主动校验进度 / 处理 worker 重启。
+   *
+   * @param accountId 账户ID
+   * @param uploadToken initVideoUpload 拿到的 Location URL
+   * @param totalSize 视频文件总大小（字节）
+   * @returns
+   *   - { state: 'completed', videoId } 上传已结束，拿到 videoId；
+   *   - { state: 'incomplete', uploadedBytes } 还在传，已收到这么多字节；
+   *   - { state: 'expired' } token 已失效，必须重新初始化；
+   *   - { state: 'unknown' } 其他情况，建议重试。
+   */
+  async queryUploadStatus(
+    accountId: string,
+    uploadToken: string,
+    totalSize: number,
+  ): Promise<
+    | { state: 'completed', videoId: string }
+    | { state: 'incomplete', uploadedBytes: number }
+    | { state: 'expired' }
+    | { state: 'unknown', status?: number }
+  > {
+    const accessToken = await this.getUserAccessToken(accountId)
+    if (!accessToken)
+      throw new AppException(ResponseCode.ChannelAccessTokenFailed, { accountId })
+
+    try {
+      const response = await axios.put(uploadToken, '', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Length': '0',
+          'Content-Range': `bytes */${totalSize}`,
+        },
+        validateStatus: status =>
+          status === 200 || status === 201 || status === 308 || status === 404 || status === 410,
+      })
+
+      if (response.status === 200 || response.status === 201) {
+        const videoId = (response.data as { id?: string } | undefined)?.id
+        if (videoId) {
+          return { state: 'completed', videoId }
+        }
+        // 200 但没拿到 id，按 unknown 处理（不阻塞，让上层重试）
+        return { state: 'unknown', status: response.status }
+      }
+
+      if (response.status === 308) {
+        // Range: "bytes=0-{lastByte}" → 下一段从 lastByte+1 开始
+        const rangeHeader = (response.headers as Record<string, string | undefined>)['range']
+          ?? (response.headers as Record<string, string | undefined>)['Range']
+        if (!rangeHeader) {
+          // 没有 Range 头，说明 0 字节已上传
+          return { state: 'incomplete', uploadedBytes: 0 }
+        }
+        const match = rangeHeader.match(/bytes=\d+-(\d+)/)
+        if (!match) {
+          return { state: 'incomplete', uploadedBytes: 0 }
+        }
+        const lastByte = Number.parseInt(match[1], 10)
+        return { state: 'incomplete', uploadedBytes: lastByte + 1 }
+      }
+
+      // 404 / 410 → uploadToken 已过期或会话被服务端清理
+      return { state: 'expired' }
+    }
+    catch (error) {
+      this.logger.warn(`[youtube] queryUploadStatus failed: ${(error as Error).message}`)
+      return { state: 'unknown' }
     }
   }
 
