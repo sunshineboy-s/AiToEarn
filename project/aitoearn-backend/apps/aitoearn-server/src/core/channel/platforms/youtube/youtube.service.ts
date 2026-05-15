@@ -446,8 +446,8 @@ export class YoutubeService extends PlatformBaseService {
       throw new PlatformAuthExpiredException(this.platform, accountId)
     }
 
-    const isTokenExpired = credential.expires_in <= getCurrentTimestamp()
-    if (!isTokenExpired) {
+    // 留 60s margin：避免拿到一个再过几秒就被 Google 拒掉的 token。与 Pinterest TOKEN_REFRESH_MARGIN 行为一致。
+    if (!this.isTokenExpired(credential.expires_in)) {
       return credential.access_token as string
     }
 
@@ -456,8 +456,7 @@ export class YoutubeService extends PlatformBaseService {
       throw new PlatformAuthExpiredException(this.platform, accountId)
     }
 
-    const isRefreshTokenExpired = credential.refresh_expires_in && credential.refresh_expires_in <= getCurrentTimestamp()
-    if (isRefreshTokenExpired) {
+    if (credential.refresh_expires_in && this.isTokenExpired(credential.refresh_expires_in)) {
       throw new PlatformAuthExpiredException(this.platform, accountId)
     }
 
@@ -2237,10 +2236,10 @@ export class YoutubeService extends PlatformBaseService {
     await this.ensureLocalAccount(accountId)
     const credential = await this.getOAuth2Credential(accountId)
     if (credential && credential.access_token) {
-      this.updateAccountStatus(accountId, 1)
+      await this.safeUpdateAccountStatus(accountId, 1)
       return 1
     }
-    this.updateAccountStatus(accountId, 0)
+    await this.safeUpdateAccountStatus(accountId, 0)
     return 0
   }
 

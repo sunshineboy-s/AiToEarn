@@ -11,6 +11,7 @@ import threadsSvg from '@/assets/svgs/plat/threads.png'
 import tiktokSvg from '@/assets/svgs/plat/tiktok.svg'
 import twitterSvg from '@/assets/svgs/plat/twitter.png'
 import xhsSvg from '@/assets/svgs/plat/xhs.svg'
+import xianyuSvg from '@/assets/svgs/plat/xianyu.svg'
 import youtubeSvg from '@/assets/svgs/plat/youtube.png'
 // 平台类型
 export enum PlatType {
@@ -28,6 +29,7 @@ export enum PlatType {
   Threads = 'threads', // Threads
   Pinterest = 'pinterest', // Pinterest
   LinkedIn = 'linkedin', // LinkedIn
+  Xianyu = 'xianyu', // 闲鱼（咸鱼）
 }
 
 export interface IAccountPlatInfo {
@@ -265,6 +267,28 @@ export const AccountPlatInfoMap = new Map<PlatType, IAccountPlatInfo>([
       jiancha: false,
     },
   ],
+  [
+    PlatType.Xianyu,
+    {
+      name: '闲鱼',
+      icon: xianyuSvg,
+      url: 'https://www.goofish.com/',
+      // 闲鱼是商品类平台，仍归到 ImageText 类型；视频 + 多图都通过 ImageText 流走
+      pubTypes: new Set([PubType.ImageText]),
+      commonPubParamsConfig: {
+        titleMax: 30,
+        topicMax: 5,
+        desMax: 5000,
+        imagesMax: 9,
+      },
+      themeColor: '#FFB400',
+      jiancha: true,
+      tips: {
+        account: '闲鱼对个人用户没有公开 OAuth API，请通过桌面端登录或使用 Relay 商家账号',
+        publish: '闲鱼商品需提供标题、至少 1 张图片，以及一口价或起拍价中的至少一项',
+      },
+    },
+  ],
 ])
 export const AccountPlatInfoArr = Array.from(AccountPlatInfoMap)
 
@@ -288,6 +312,7 @@ export const TASK_EXCLUDED_PLATFORMS = new Set<PlatType>([
   PlatType.Threads,
   PlatType.Pinterest,
   PlatType.LinkedIn,
+  PlatType.Xianyu,
 ])
 
 /** 不支持"收藏"互动的平台 */
@@ -295,6 +320,7 @@ const COLLECT_UNSUPPORTED_PLATFORMS = new Set<PlatType>([
   PlatType.Facebook,
   PlatType.Instagram,
   PlatType.Twitter,
+  PlatType.Xianyu,
 ])
 
 /** 支持任务推广的平台列表（过滤 Threads、Pinterest） */
@@ -313,7 +339,7 @@ export function isPlatCollectSupported(platType: PlatType): boolean {
 }
 
 /** 不支持"播放量"数据的平台 */
-const VIEW_UNSUPPORTED_PLATFORMS = new Set<PlatType>([PlatType.Xhs])
+const VIEW_UNSUPPORTED_PLATFORMS = new Set<PlatType>([PlatType.Xhs, PlatType.Xianyu])
 
 /** 判断平台是否支持播放量数据 */
 export function isPlatViewSupported(platType: PlatType): boolean {

@@ -11,6 +11,7 @@ import { PinterestModule } from '../platforms/pinterest/pinterest.module'
 import { TiktokModule } from '../platforms/tiktok/tiktok.module'
 import { TwitterModule } from '../platforms/twitter/twitter.module'
 import { WxPlatModule } from '../platforms/wx-plat/wx-plat.module'
+import { XianyuModule } from '../platforms/xianyu/xianyu.module'
 import { YoutubeModule } from '../platforms/youtube/youtube.module'
 import { FinalizePublishPostConsumer } from './consumers/finalize-publish.consumer'
 import { ImmediatePublishPostConsumer } from './consumers/immediate-publish.consumer'
@@ -30,6 +31,7 @@ import { ThreadsPublishService } from './providers/threads.service'
 import { TiktokPubService } from './providers/tiktok.service'
 import { TwitterPubService } from './providers/twitter.service'
 import { WxGzhPubService } from './providers/wx-gzh.service'
+import { XianyuPubService } from './providers/xianyu.service'
 import { YoutubePubService } from './providers/youtube.service'
 import { PublishingService } from './publishing.service'
 import { EnqueuePublishingTaskScheduler } from './scheduler/enqueue-publishing-task.scheduler'
@@ -49,6 +51,7 @@ import { EnqueuePublishingTaskScheduler } from './scheduler/enqueue-publishing-t
     PinterestModule,
     DouyinModule,
     GoogleBusinessModule,
+    XianyuModule,
   ],
   providers: [
     CredentialInvalidationService,
@@ -71,6 +74,7 @@ import { EnqueuePublishingTaskScheduler } from './scheduler/enqueue-publishing-t
     TwitterPubService,
     DouyinPubService,
     GoogleBusinessPubService,
+    XianyuPubService,
     EnqueuePublishingTaskScheduler,
     {
       provide: 'PUBLISHING_PROVIDERS',
@@ -87,6 +91,7 @@ import { EnqueuePublishingTaskScheduler } from './scheduler/enqueue-publishing-t
         linkedin: LinkedinPublishService,
         douyin: DouyinPubService,
         googleBusiness: GoogleBusinessPubService,
+        xianyu: XianyuPubService,
       ) => ({
         [AccountType.BILIBILI]: bilibili,
         [AccountType.KWAI]: kwai,
@@ -100,6 +105,7 @@ import { EnqueuePublishingTaskScheduler } from './scheduler/enqueue-publishing-t
         [AccountType.LINKEDIN]: linkedin,
         [AccountType.Douyin]: douyin,
         [AccountType.GOOGLE_BUSINESS]: googleBusiness,
+        [AccountType.XIANYU]: xianyu,
       }),
       inject: [
         BilibiliPubService,
@@ -114,6 +120,7 @@ import { EnqueuePublishingTaskScheduler } from './scheduler/enqueue-publishing-t
         LinkedinPublishService,
         DouyinPubService,
         GoogleBusinessPubService,
+        XianyuPubService,
       ],
     },
   ],

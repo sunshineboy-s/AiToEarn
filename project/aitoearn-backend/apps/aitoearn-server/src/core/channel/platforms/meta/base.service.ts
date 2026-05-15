@@ -77,11 +77,11 @@ export class MetaBaseService extends PlatformBaseService {
     await this.ensureLocalAccount(accountId)
     const credential = await this.getOAuth2Credential(accountId)
     if (!credential) {
-      this.updateAccountStatus(accountId, 0)
+      await this.safeUpdateAccountStatus(accountId, 0)
       return 0
     }
-    const status = credential.expires_in > getCurrentTimestamp() ? 1 : 0
-    this.updateAccountStatus(accountId, status)
+    const status = this.isTokenExpired(credential.expires_in) ? 0 : 1
+    await this.safeUpdateAccountStatus(accountId, status)
     return status
   }
 

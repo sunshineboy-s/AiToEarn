@@ -11,6 +11,7 @@ export enum AccountType {
   YOUTUBE = 'youtube', // youtube
   TWITTER = 'twitter', // twitter
   TIKTOK = 'tiktok', // tiktok
+  XIANYU = 'xianyu', // 闲鱼（咸鱼）
 }
 
 // 账号状态
