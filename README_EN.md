@@ -95,7 +95,7 @@ Distribute content to 10+ major platforms worldwide with one click — no more m
 
 ### 💬 Engage — Content Engagement Agent
 
-Automate engagement operations across all supported platforms via the AiToEarn browser extension.
+**No browser extension required.** AiToEarn ships with a built-in engagement engine that works out of the box, automating engagement operations across all supported platforms.
 
 - **Automated Actions**: Auto-like, bookmark, and follow — batch operations at scale
 - **AI Smart Replies**: Use LLMs to generate targeted replies for each comment

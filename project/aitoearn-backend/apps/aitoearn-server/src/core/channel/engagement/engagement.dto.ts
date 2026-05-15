@@ -87,11 +87,43 @@ export const FetchMetaPostsRequestSchema = z.object({
   pagination: z.union([KeysetPaginationSchema, OffsetPaginationSchema]).nullish().describe('分页参数'),
 })
 
+export const PlatformEnumSchema = z.enum([
+  'facebook',
+  'instagram',
+  'threads',
+  'twitter',
+  'youtube',
+  'tiktok',
+  'bilibili',
+  'douyin',
+  'KWAI',
+  'xhs',
+  'linkedin',
+  'wxGzh',
+  'wxSph',
+  'pinterest',
+])
+export type PlatformEnum = z.infer<typeof PlatformEnumSchema>
+
 export const LikePostRequestSchema = z.object({
   accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
-  platform: z.enum(['facebook']).describe('平台，仅支持 facebook'),
+  platform: PlatformEnumSchema.describe('平台'),
+  postId: z.string({ message: 'Post ID is required' }).describe('作品ID'),
+})
+
+export const FollowUserRequestSchema = z.object({
+  accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
+  platform: PlatformEnumSchema.describe('平台'),
+  targetUserId: z.string({ message: 'targetUserId is required' }).describe('目标账号'),
+})
+
+export const FavoritePostRequestSchema = z.object({
+  accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
+  platform: PlatformEnumSchema.describe('平台'),
   postId: z.string({ message: 'Post ID is required' }).describe('作品ID'),
 })
 
 export class FetchMetaPostsRequest extends createZodDto(FetchMetaPostsRequestSchema) {}
 export class LikePostRequest extends createZodDto(LikePostRequestSchema) {}
+export class FollowUserRequest extends createZodDto(FollowUserRequestSchema) {}
+export class FavoritePostRequest extends createZodDto(FavoritePostRequestSchema) {}

@@ -14,9 +14,15 @@ export enum EngagementTaskStatus {
 }
 export enum EngagementTaskType {
   LIKE = 'LIKE',
+  UNLIKE = 'UNLIKE',
   FAVORITE = 'FAVORITE',
+  UNFAVORITE = 'UNFAVORITE',
+  FOLLOW = 'FOLLOW',
+  UNFOLLOW = 'UNFOLLOW',
   COMMENT = 'COMMENT', // comment on post
   REPLY = 'REPLY', // reply to comment
+  MINING = 'MINING', // comment intent classification + storage
+  BRAND_SCAN = 'BRAND_SCAN', // periodic brand monitor scan
 }
 
 export enum EngagementTargetScope {

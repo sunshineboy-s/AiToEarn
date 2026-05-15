@@ -17,6 +17,7 @@ export enum NotificationMessageKey {
   AgentResultRequiresAction = 'agent_result_requires_action',
   AgentForwarded = 'agent_forwarded',
   AppRelease = 'app_release',
+  BrandMentionHigh = 'brand_mention_high',
 }
 
 type MessageValue = string | ((data: unknown) => string)
@@ -218,6 +219,18 @@ const notificationMessages: Record<NotificationMessageKey, NotificationMessageDe
       'en-US': template.compile('A new {{platform}} version {{version}} has been released.'),
       'zh-CN': template.compile('{{platform}} 新版本 {{version}} 已发布。'),
       'ja-JP': template.compile('{{platform}}の新バージョン{{version}}がリリースされました。'),
+    },
+  },
+  [NotificationMessageKey.BrandMentionHigh]: {
+    title: {
+      'en-US': template.compile('[{{monitor}}] HIGH urgency mention on {{platform}}'),
+      'zh-CN': template.compile('[{{monitor}}] {{platform}} 出现高优先级提及'),
+      'ja-JP': template.compile('[{{monitor}}] {{platform}}に重要度HIGHのメンション'),
+    },
+    content: {
+      'en-US': template.compile('{{snippet}}'),
+      'zh-CN': template.compile('{{snippet}}'),
+      'ja-JP': template.compile('{{snippet}}'),
     },
   },
 }

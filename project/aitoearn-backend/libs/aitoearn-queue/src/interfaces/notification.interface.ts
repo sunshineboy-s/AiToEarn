@@ -50,5 +50,26 @@ type NotificationDataByType
     type: NotificationType.TaskSettled
     data?: Record<string, unknown>
   })
+  | (BaseNotificationData & {
+    type: NotificationType.BrandMention
+    data: BrandMentionNotificationData
+  })
+
+/**
+ * Payload for brand-mention notifications. The producer is the
+ * BrandMonitorService; the data is opaque to the queue infra and consumed by
+ * the notification service which renders it via NotificationMessageKey.
+ */
+export interface BrandMentionNotificationData {
+  monitorId: string
+  monitorName: string
+  mentionId: string
+  platform: string
+  postId: string
+  postUrl: string
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH'
+  /** Trimmed comment/post snippet (≤280 chars). */
+  snippet: string
+}
 
 export type NotificationData = NotificationDataByType

@@ -18,6 +18,15 @@ export enum QueueName {
   /** 评论回复任务队列 */
   EngagementReplyToComment = 'engagement_reply_to_comment_task',
 
+  /** 评论挖掘任务队列 (intent classification + storage) */
+  EngagementMining = 'engagement_mining',
+
+  /** 自动化动作执行队列 (server -> aitoearn-automation worker) */
+  EngagementAutomationAction = 'engagement_automation_action',
+
+  /** 品牌监测扫描队列 (BullMQ repeat job) */
+  BrandMonitorScan = 'brand_monitor_scan',
+
   /** dump social media avatar queue */
   DumpSocialMediaAvatar = 'dump_social_media_avatar',
 
