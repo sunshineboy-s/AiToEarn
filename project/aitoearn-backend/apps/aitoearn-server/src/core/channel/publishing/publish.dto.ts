@@ -126,6 +126,35 @@ export const TiktokPublishOptionSchema = z.object({
   brand_content_toggle: z.boolean().optional(),
 })
 
+/**
+ * 闲鱼（Xianyu / Goofish）发布选项
+ *
+ * 闲鱼对个人用户没有公开 OAuth 发布接口，因此本字段仅在
+ * Relay 中继账号或 Electron Cookie 通路下生效。
+ */
+export const XianyuPublishOptionSchema = z.object({
+  price: z.number().positive().optional().describe('一口价'),
+  reservePrice: z.number().positive().optional().describe('起拍价 / 保留价'),
+  stuffStatus: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]).optional().describe('1=全新, 2=99新, 3=95新, 4=9成新, 5=8成新及以下'),
+  freeShipping: z.boolean().optional(),
+  location: z.object({
+    province: z.string().optional(),
+    city: z.string().optional(),
+    district: z.string().optional(),
+  }).optional(),
+  catId: z.number().int().optional().describe('类目ID'),
+  fishpondId: z.number().int().optional().describe('鱼塘/兴趣圈ID'),
+  enableAutoReply: z.boolean().optional(),
+  videoDurationSec: z.number().nonnegative().optional(),
+  serviceLabels: z.array(z.string()).optional(),
+})
+
 export const GoogleBusinessPublishOptionSchema = z.object({
   topicType: z.enum(['STANDARD', 'EVENT', 'OFFER']).default('STANDARD').describe('帖子类型'),
   callToAction: z.object({
@@ -185,6 +214,7 @@ export const CreatePublishSchema = z.object({
     pinterest: pinterestPublishOptionSchema.optional(),
     tiktok: TiktokPublishOptionSchema.optional(),
     googleBusiness: GoogleBusinessPublishOptionSchema.optional(),
+    xianyu: XianyuPublishOptionSchema.optional(),
   }).optional(),
 })
 export class CreatePublishDto extends createZodDto(CreatePublishSchema) { }
@@ -233,6 +263,7 @@ export const CreatePublishRecordSchema = z.object({
     instagram: InstagramPublishOptionSchema.optional(),
     threads: threadsPublishOptionSchema.optional(),
     pinterest: pinterestPublishOptionSchema.optional(),
+    xianyu: XianyuPublishOptionSchema.optional(),
   }).optional(),
 })
 export class CreatePublishRecordDto extends createZodDto(CreatePublishRecordSchema) { }

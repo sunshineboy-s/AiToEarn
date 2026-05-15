@@ -307,6 +307,11 @@ export const messages: Record<ResponseCode, Record<Locale, MessageValue>> = {
     'zh-CN': '该作品不属于此账号',
     'ja-JP': 'この作品はこのアカウントに属していません',
   },
+  [ResponseCode.XianyuOAuthUnsupported]: {
+    'en-US': 'Xianyu does not support direct OAuth publishing for individual users; please use a Relay or Electron-cookie account',
+    'zh-CN': '闲鱼暂不支持个人用户的 OAuth 直接发布，请改用 Relay 或桌面端 Cookie 账号',
+    'ja-JP': '閑魚（Xianyu）は個人ユーザーのOAuth直接投稿に対応していません。RelayまたはデスクトップのCookieアカウントをご利用ください',
+  },
 
   // 15100 (short-link)
   [ResponseCode.ShortLinkNotFound]: {

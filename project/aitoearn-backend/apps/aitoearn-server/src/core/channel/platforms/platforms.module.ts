@@ -23,6 +23,8 @@ import { TiktokService } from './tiktok/tiktok.service'
 import { TwitterModule } from './twitter/twitter.module'
 import { TwitterService } from './twitter/twitter.service'
 import { WxPlatModule } from './wx-plat/wx-plat.module'
+import { XianyuModule } from './xianyu/xianyu.module'
+import { XianyuService } from './xianyu/xianyu.service'
 import { XiaohongshuModule } from './xiaohongshu/xiaohongshu.module'
 import { XiaohongshuService } from './xiaohongshu/xiaohongshu.service'
 import { YoutubeModule } from './youtube/youtube.module'
@@ -38,6 +40,7 @@ import { YoutubeService } from './youtube/youtube.service'
     TiktokModule,
     TwitterModule,
     WxPlatModule,
+    XianyuModule,
     XiaohongshuModule,
     YoutubeModule,
     DouyinModule,
@@ -63,6 +66,7 @@ import { YoutubeService } from './youtube/youtube.service'
         douyin: DouyinService,
         xiaohongshu: XiaohongshuService,
         googleBusiness: GoogleBusinessService,
+        xianyu: XianyuService,
       ) => ({
         [AccountType.BILIBILI]: bilibili,
         [AccountType.KWAI]: kwai,
@@ -77,6 +81,7 @@ import { YoutubeService } from './youtube/youtube.service'
         [AccountType.Douyin]: douyin,
         [AccountType.Xhs]: xiaohongshu,
         [AccountType.GOOGLE_BUSINESS]: googleBusiness,
+        [AccountType.XIANYU]: xianyu,
       }),
       inject: [
         BilibiliService,
@@ -92,6 +97,7 @@ import { YoutubeService } from './youtube/youtube.service'
         DouyinService,
         XiaohongshuService,
         GoogleBusinessService,
+        XianyuService,
       ],
     },
   ],

@@ -13,6 +13,7 @@ import { EngagementRecordService } from './engagement.record.service'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
+import { XianyuEngagementProvider } from './providers/xianyu.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
 
 @Injectable()
@@ -23,6 +24,7 @@ export class EngagementService {
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
+    xianyuProvider: XianyuEngagementProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly queueService: QueueService,
@@ -33,13 +35,21 @@ export class EngagementService {
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('xianyu', xianyuProvider)
   }
 
+  /**
+   * 检查 relay 账号。闲鱼例外：本地 OAuth 账号也走 engagement provider，
+   * provider 内部会决定调用 relay 还是返回空/抛错，所以这里不能拦闲鱼的 relay 账号
+   * （它们才是真正能用的账号）。
+   */
   private async checkRelayAccount(accountId: string) {
     const account = await this.channelAccountService.getAccountInfo(accountId)
-    if (account?.relayAccountRef) {
-      throw new RelayAccountException(account.relayAccountRef, accountId)
-    }
+    if (!account?.relayAccountRef)
+      return
+    if (account.type === 'xianyu')
+      return // 闲鱼 relay 账号是合法路径，不抛
+    throw new RelayAccountException(account.relayAccountRef, accountId)
   }
 
   private getProvider(providerKey: string): EngagementProvider {

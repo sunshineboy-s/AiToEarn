@@ -6,7 +6,7 @@ export const EngagementTask = z.object({
   accountId: z.string({ message: 'accountId is required' }).describe('账号ID'),
   userId: z.string(),
   postId: z.string(),
-  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest']).describe('平台'),
+  platform: z.enum(['facebook', 'instagram', 'threads', 'twitter', 'youtube', 'tiktok', 'bilibili', 'douyin', 'KWAI', 'xhs', 'linkedin', 'wxGzh', 'pinterest', 'xianyu']).describe('平台'),
   status: z.enum(EngagementTaskStatus).default(EngagementTaskStatus.CREATED),
   taskType: z.enum(EngagementTaskType).default(EngagementTaskType.REPLY),
   targetScope: z.enum(EngagementTargetScope).default(EngagementTargetScope.ALL),

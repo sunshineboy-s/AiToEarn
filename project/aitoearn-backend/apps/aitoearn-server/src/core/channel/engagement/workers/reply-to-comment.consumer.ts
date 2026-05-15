@@ -9,6 +9,8 @@ import { EngagementRecordService } from '../engagement.record.service'
 import { FacebookEngagementProvider } from '../providers/facebook.provider'
 import { InstagramEngagementProvider } from '../providers/instagram.provider'
 import { ThreadsEngagementProvider } from '../providers/threads.provider'
+import { XianyuEngagementProvider } from '../providers/xianyu.provider'
+import { YoutubeEngagementProvider } from '../providers/youtube.provider'
 
 @QueueProcessor(QueueName.EngagementReplyToComment, {
   concurrency: 3,
@@ -22,6 +24,8 @@ export class EngagementReplyToCommentConsumer extends WorkerHost {
     facebookProvider: FacebookEngagementProvider,
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
+    youtubeProvider: YoutubeEngagementProvider,
+    xianyuProvider: XianyuEngagementProvider,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly channelAccountService: ChannelAccountService,
   ) {
@@ -29,6 +33,8 @@ export class EngagementReplyToCommentConsumer extends WorkerHost {
     this.providerMap.set('facebook', facebookProvider)
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
+    this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('xianyu', xianyuProvider)
   }
 
   private getProvider(providerKey: string): EngagementProvider {
@@ -50,8 +56,9 @@ export class EngagementReplyToCommentConsumer extends WorkerHost {
     }
 
     // 安全检查：relay 账号任务不应到达队列消费者
+    // 例外：闲鱼 relay 账号是合法路径（XianyuEngagementProvider 内部会调 RelayClient）
     const account = await this.channelAccountService.getAccountInfo(subTask.accountId)
-    if (account?.relayAccountRef) {
+    if (account?.relayAccountRef && account.type !== 'xianyu') {
       this.logger.warn(`Relay account ${subTask.accountId} task reached engagement consumer, skipping sub task ${job.data.taskId}`)
       await this.engagementRecordService.updateEngagementSubTaskStatus(job.data.taskId, EngagementTaskStatus.FAILED)
       return
