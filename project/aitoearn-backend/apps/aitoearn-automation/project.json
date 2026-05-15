@@ -1,0 +1,77 @@
+{
+  "name": "aitoearn-automation",
+  "sourceRoot": "apps/aitoearn-automation/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/aitoearn-automation",
+        "tsConfig": "apps/aitoearn-automation/tsconfig.app.json",
+        "packageJson": "apps/aitoearn-automation/package.json",
+        "main": "apps/aitoearn-automation/src/main.ts",
+        "assets": [
+          "apps/aitoearn-automation/*.md"
+        ],
+        "generatePackageJson": true,
+        "clean": true
+      }
+    },
+    "prune-lockfile": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "executor": "@nx/js:prune-lockfile",
+      "outputs": [
+        "{workspaceRoot}/dist/apps/aitoearn-automation/package.json",
+        "{workspaceRoot}/dist/apps/aitoearn-automation/pnpm-lock.yaml"
+      ],
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "local",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "aitoearn-automation:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "local": {
+          "buildTarget": "aitoearn-automation:build:development",
+          "args": [
+            "-c",
+            "{workspaceRoot}/apps/aitoearn-automation/config/config.js"
+          ]
+        },
+        "dev": {
+          "buildTarget": "aitoearn-automation:build:development",
+          "args": [
+            "-c",
+            "{workspaceRoot}/apps/aitoearn-automation/config/config.js"
+          ]
+        },
+        "prod": {
+          "buildTarget": "aitoearn-automation:build:production",
+          "args": [
+            "-c",
+            "{workspaceRoot}/apps/aitoearn-automation/config/config.js"
+          ]
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "fix": true
+      }
+    },
+    "docker-context": {},
+    "docker-build": {}
+  }
+}

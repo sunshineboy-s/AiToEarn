@@ -308,6 +308,43 @@ export const messages: Record<ResponseCode, Record<Locale, MessageValue>> = {
     'ja-JP': 'この作品はこのアカウントに属していません',
   },
 
+  // 15040 (engagement built-in engine)
+  [ResponseCode.EngagementCapabilityUnavailable]: {
+    'en-US': template.compile('Action {{action}} is not supported on platform {{platform}}'),
+    'zh-CN': template.compile('平台 {{platform}} 暂不支持 {{action}} 操作'),
+    'ja-JP': template.compile('プラットフォーム {{platform}} では操作 {{action}} はサポートされていません'),
+  },
+  [ResponseCode.EngagementRateLimited]: {
+    'en-US': template.compile('Engagement rate limit hit; retry in {{retryAfter}}s'),
+    'zh-CN': template.compile('互动操作已限流，请在 {{retryAfter}} 秒后重试'),
+    'ja-JP': template.compile('エンゲージメントのレート制限に達しました。{{retryAfter}}秒後に再試行してください'),
+  },
+  [ResponseCode.EngagementCircuitBreakerOpen]: {
+    'en-US': 'Engagement circuit breaker is open for this account',
+    'zh-CN': '该账号互动熔断已触发，请稍后再试',
+    'ja-JP': 'このアカウントのエンゲージメントサーキットブレーカーが作動しています',
+  },
+  [ResponseCode.EngagementAutomationUnavailable]: {
+    'en-US': 'Engagement automation worker is unavailable',
+    'zh-CN': '自动化执行器暂不可用',
+    'ja-JP': 'エンゲージメント自動化ワーカーは利用できません',
+  },
+  [ResponseCode.EngagementCookieMissing]: {
+    'en-US': 'No cookies stored for this account',
+    'zh-CN': '该账号未导入 Cookie',
+    'ja-JP': 'このアカウントには Cookie が保存されていません',
+  },
+  [ResponseCode.BrandMonitorNotFound]: {
+    'en-US': 'Brand monitor not found',
+    'zh-CN': '品牌监测任务未找到',
+    'ja-JP': 'ブランドモニターが見つかりません',
+  },
+  [ResponseCode.EngagementMiningHitNotFound]: {
+    'en-US': 'Engagement mining hit not found',
+    'zh-CN': '评论挖掘记录未找到',
+    'ja-JP': 'エンゲージメントマイニングのヒットが見つかりません',
+  },
+
   // 15100 (short-link)
   [ResponseCode.ShortLinkNotFound]: {
     'en-US': 'Short link not found',

@@ -3,11 +3,25 @@ import { PostsResponseVo, PostVo } from '@yikart/common'
 import { FacebookPagePostRequest, FacebookPostCommentsRequest } from '../../libs/facebook/facebook.interfaces'
 import { FacebookService } from '../../platforms/meta/facebook.service'
 import { KeysetPagination, OffsetPagination } from '../engagement.dto'
-import { EngagementComment, EngagementProvider, FetchPostCommentsResponse, PublishCommentResponse } from '../engagement.interface'
+import { ActionResult, EngagementCapability, EngagementComment, EngagementNotSupportedError, EngagementProvider, FetchPostCommentsResponse, PublishCommentResponse } from '../engagement.interface'
 
 @Injectable()
 export class FacebookEngagementProvider implements EngagementProvider {
   public readonly paginationType = 'keyset'
+  public readonly platform = 'facebook'
+  public readonly capability: EngagementCapability = {
+    like: true,
+    unlike: true,
+    favorite: false,
+    unfavorite: false,
+    follow: false,
+    unfollow: false,
+    comment: true,
+    reply: true,
+    fetchUserPosts: true,
+    search: false,
+    engine: 'api',
+  }
 
   constructor(
     private readonly FacebookService: FacebookService,
@@ -165,5 +179,31 @@ export class FacebookEngagementProvider implements EngagementProvider {
 
   async replyToComment(accountId: string, commentId: string, message: string): Promise<PublishCommentResponse> {
     return this.publishFacebookObjectComment(accountId, commentId, message)
+  }
+
+  async likePost(accountId: string, postId: string): Promise<ActionResult> {
+    const r = await this.FacebookService.likePost(accountId, postId)
+    return { success: r.success }
+  }
+
+  async unlikePost(accountId: string, postId: string): Promise<ActionResult> {
+    const r = await this.FacebookService.unlikePost(accountId, postId)
+    return { success: r.success }
+  }
+
+  favoritePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'favorite')
+  }
+
+  unfavoritePost(_accountId: string, _postId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unfavorite')
+  }
+
+  followUser(_accountId: string, _targetUserId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'follow')
+  }
+
+  unfollowUser(_accountId: string, _targetUserId: string): Promise<ActionResult> {
+    throw new EngagementNotSupportedError(this.platform, 'unfollow')
   }
 }

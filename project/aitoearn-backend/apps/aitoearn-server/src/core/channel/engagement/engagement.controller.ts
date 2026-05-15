@@ -1,9 +1,21 @@
-import { Body, Controller, Post } from '@nestjs/common'
+import { Body, Controller, Get, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { GetToken, Public, TokenInfo } from '@yikart/aitoearn-auth'
 import { ApiDoc } from '@yikart/common'
-import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
-import { PublishCommentResponse } from './engagement.interface'
+import {
+  AIGenCommentDto,
+  FavoritePostRequest,
+  FetchCommentRepliesRequest,
+  FetchMetaPostsRequest,
+  FetchPostCommentsRequest,
+  FetchPostsRequest,
+  FollowUserRequest,
+  LikePostRequest,
+  PublishCommentReplyRequest,
+  PublishCommentRequest,
+  ReplyToCommentsDto,
+} from './engagement.dto'
+import { ActionResult, EngagementCapability, PublishCommentResponse } from './engagement.interface'
 import { EngagementService } from './engagement.service'
 
 @ApiTags('Engage/Engagement')
@@ -12,6 +24,14 @@ export class EngagementController {
   constructor(
     private readonly engagementService: EngagementService,
   ) {}
+
+  @ApiDoc({
+    summary: 'Capability matrix (which actions each platform supports)',
+  })
+  @Get('/capabilities')
+  capabilities(): Array<EngagementCapability & { platform: string }> {
+    return this.engagementService.getCapabilities()
+  }
 
   @ApiDoc({
     summary: 'List Channel Posts',
@@ -36,29 +56,85 @@ export class EngagementController {
     return this.engagementService.fetchMetaPosts(data)
   }
 
+  // ---------------------------------------------------------------------------
+  // engagement actions (Phase 1 unified surface — all platform-aware)
+  // ---------------------------------------------------------------------------
+
   @ApiDoc({
-    summary: 'Like Post (Facebook Page)',
+    summary: 'Like a post',
     body: LikePostRequest.schema,
   })
   @Post('/post/like')
   async likePost(
     @GetToken() token: TokenInfo,
     @Body() data: LikePostRequest,
-  ): Promise<{ success: boolean }> {
+  ): Promise<ActionResult> {
     return this.engagementService.likePost(data)
   }
 
   @ApiDoc({
-    summary: 'Unlike Post (Facebook Page)',
+    summary: 'Unlike a post',
     body: LikePostRequest.schema,
   })
   @Post('/post/unlike')
   async unlikePost(
     @GetToken() token: TokenInfo,
     @Body() data: LikePostRequest,
-  ): Promise<{ success: boolean }> {
+  ): Promise<ActionResult> {
     return this.engagementService.unlikePost(data)
   }
+
+  @ApiDoc({
+    summary: 'Favorite (bookmark) a post',
+    body: FavoritePostRequest.schema,
+  })
+  @Post('/post/favorite')
+  async favoritePost(
+    @GetToken() token: TokenInfo,
+    @Body() data: FavoritePostRequest,
+  ): Promise<ActionResult> {
+    return this.engagementService.favoritePost(data)
+  }
+
+  @ApiDoc({
+    summary: 'Remove favorite (bookmark) from a post',
+    body: FavoritePostRequest.schema,
+  })
+  @Post('/post/unfavorite')
+  async unfavoritePost(
+    @GetToken() token: TokenInfo,
+    @Body() data: FavoritePostRequest,
+  ): Promise<ActionResult> {
+    return this.engagementService.unfavoritePost(data)
+  }
+
+  @ApiDoc({
+    summary: 'Follow a user / channel',
+    body: FollowUserRequest.schema,
+  })
+  @Post('/user/follow')
+  async followUser(
+    @GetToken() token: TokenInfo,
+    @Body() data: FollowUserRequest,
+  ): Promise<ActionResult> {
+    return this.engagementService.followUser(data)
+  }
+
+  @ApiDoc({
+    summary: 'Unfollow a user / channel',
+    body: FollowUserRequest.schema,
+  })
+  @Post('/user/unfollow')
+  async unfollowUser(
+    @GetToken() token: TokenInfo,
+    @Body() data: FollowUserRequest,
+  ): Promise<ActionResult> {
+    return this.engagementService.unfollowUser(data)
+  }
+
+  // ---------------------------------------------------------------------------
+  // comments / replies
+  // ---------------------------------------------------------------------------
 
   @ApiDoc({
     summary: 'List Post Comments',

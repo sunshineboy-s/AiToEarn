@@ -7,13 +7,17 @@ import { RelayAccountException } from '../../relay/relay-account.exception'
 import { ChannelAccountService } from '../platforms/channel-account.service'
 import { FacebookService } from '../platforms/meta/facebook.service'
 import { ReplyToCommentAnswer } from './ai.dto'
-import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
-import { EngagementProvider, PublishCommentResponse } from './engagement.interface'
+import { DouyinAutomationProvider } from './automation/douyin-automation.provider'
+import { XhsAutomationProvider } from './automation/xhs-automation.provider'
+import { AIGenCommentDto, FavoritePostRequest, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, FollowUserRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
+import { ActionResult, EngagementCapability, EngagementNotSupportedError, EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
+import { TwitterEngagementProvider } from './providers/twitter.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
+import { EngagementRateLimitGuardService } from './rate-limit-guard.service'
 
 @Injectable()
 export class EngagementService {
@@ -23,16 +27,57 @@ export class EngagementService {
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
+    twitterProvider: TwitterEngagementProvider,
+    xhsAutomationProvider: XhsAutomationProvider,
+    douyinAutomationProvider: DouyinAutomationProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly queueService: QueueService,
     private readonly facebookService: FacebookService,
     private readonly channelAccountService: ChannelAccountService,
+    private readonly rateLimit: EngagementRateLimitGuardService,
   ) {
     this.providerMap.set('facebook', facebookProvider)
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('twitter', twitterProvider)
+    this.providerMap.set('xhs', xhsAutomationProvider)
+    this.providerMap.set('douyin', douyinAutomationProvider)
+  }
+
+  /**
+   * Snapshot of the platform capability matrix. The frontend calls this on
+   * page load to know which buttons to disable. Adding a new provider simply
+   * inserts another row.
+   */
+  getCapabilities(): Array<EngagementCapability & { platform: string }> {
+    return Array.from(this.providerMap.values()).map(p => ({
+      platform: p.platform,
+      ...p.capability,
+    }))
+  }
+
+  /**
+   * Provider lookup that returns null instead of throwing — used by the brand
+   * monitor consumer when iterating over a list of platforms that may not all
+   * have a registered provider yet.
+   */
+  getProviderUnsafe(providerKey: string): EngagementProvider | null {
+    return this.providerMap.get(providerKey) ?? null
+  }
+
+  /**
+   * Pick a default channel-account for (userId, platform). Used by background
+   * scans that need *some* authenticated account but don't care which one.
+   *
+   * NOTE: Phase 6 ships a stub that always returns null — the full
+   * "pick the highest-trust account" heuristic is wired in M2 once we have a
+   * `ChannelAccountService.listByUser` method to delegate to. Until then, the
+   * brand monitor consumer simply skips platforms without an obvious account.
+   */
+  async resolveDefaultAccount(_userId: string, _platform: string): Promise<string | null> {
+    return null
   }
 
   private async checkRelayAccount(accountId: string) {
@@ -45,10 +90,11 @@ export class EngagementService {
   private getProvider(providerKey: string): EngagementProvider {
     const provider = this.providerMap.get(providerKey)
     if (!provider) {
-      throw new Error(`Engagement provider for ${providerKey} not found`)
+      throw new AppException(ResponseCode.PlatformNotSupported, { platform: providerKey })
     }
     return provider
   }
+
 
   async fetchUserPosts(data: FetchPostsRequest) {
     await this.checkRelayAccount(data.accountId)
@@ -105,14 +151,80 @@ export class EngagementService {
     return provider.fetchUserPosts(data.accountId, pagination)
   }
 
-  async likePost(data: LikePostRequest): Promise<{ success: boolean }> {
+  async likePost(data: LikePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
-    return this.facebookService.likePost(data.accountId, data.postId)
+    await this.rateLimit.assertAllowed(data.accountId, 'like')
+    const provider = this.getProvider(data.platform)
+    return this.runAction('like', data.accountId, () => provider.likePost(data.accountId, data.postId))
   }
 
-  async unlikePost(data: LikePostRequest): Promise<{ success: boolean }> {
+  async unlikePost(data: LikePostRequest): Promise<ActionResult> {
     await this.checkRelayAccount(data.accountId)
-    return this.facebookService.unlikePost(data.accountId, data.postId)
+    await this.rateLimit.assertAllowed(data.accountId, 'unlike')
+    const provider = this.getProvider(data.platform)
+    return this.runAction('unlike', data.accountId, () => provider.unlikePost(data.accountId, data.postId))
+  }
+
+  async favoritePost(data: FavoritePostRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'favorite')
+    const provider = this.getProvider(data.platform)
+    return this.runAction('favorite', data.accountId, () => provider.favoritePost(data.accountId, data.postId))
+  }
+
+  async unfavoritePost(data: FavoritePostRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'unfavorite')
+    const provider = this.getProvider(data.platform)
+    return this.runAction('unfavorite', data.accountId, () => provider.unfavoritePost(data.accountId, data.postId))
+  }
+
+  async followUser(data: FollowUserRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'follow')
+    const provider = this.getProvider(data.platform)
+    return this.runAction('follow', data.accountId, () => provider.followUser(data.accountId, data.targetUserId))
+  }
+
+  async unfollowUser(data: FollowUserRequest): Promise<ActionResult> {
+    await this.checkRelayAccount(data.accountId)
+    await this.rateLimit.assertAllowed(data.accountId, 'unfollow')
+    const provider = this.getProvider(data.platform)
+    return this.runAction('unfollow', data.accountId, () => provider.unfollowUser(data.accountId, data.targetUserId))
+  }
+
+  /**
+   * Wraps a provider call with three concerns:
+   * 1) translate `EngagementNotSupportedError` to a typed AppException
+   * 2) rate-limit + circuit-breaker bookkeeping (success ↔ recordSuccess,
+   *    a non-success result counts as a failure for the breaker)
+   * 3) re-throw any other error untouched
+   */
+  private async runAction(
+    action: string,
+    accountId: string,
+    fn: () => Promise<ActionResult>,
+  ): Promise<ActionResult> {
+    let result: ActionResult
+    try {
+      result = await fn()
+    }
+    catch (err: unknown) {
+      if (err instanceof EngagementNotSupportedError) {
+        // capability-related exceptions don't trip the breaker
+        throw new AppException(
+          ResponseCode.EngagementCapabilityUnavailable,
+          { action: err.action || action, platform: err.platform },
+        )
+      }
+      await this.rateLimit.recordFailure(accountId)
+      throw err
+    }
+    if (result.success)
+      await this.rateLimit.recordSuccess(accountId)
+    else
+      await this.rateLimit.recordFailure(accountId)
+    return result
   }
 
   async batchGenReplyContent(data: AIGenCommentDto): Promise<Record<string, string>> {
