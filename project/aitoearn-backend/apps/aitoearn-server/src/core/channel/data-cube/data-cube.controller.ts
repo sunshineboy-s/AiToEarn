@@ -8,6 +8,7 @@ import { ChannelAccountService } from '../platforms/channel-account.service'
 import { BilibiliDataService } from './bilibili-data.service'
 import { DataCubeBase } from './data.base'
 import { DouyinDataService } from './douyin-data.service'
+import { InstagramDataService } from './instagram.service'
 import { TiktokDataService } from './tiktok-data.service'
 import { WxGzhDataService } from './wx-gzh-data.service'
 import { XhsDataService } from './xhs-data.service'
@@ -22,6 +23,7 @@ export class DataCubeController {
     readonly channelAccountService: ChannelAccountService,
     readonly bilibiliDataService: BilibiliDataService,
     readonly douyinDataService: DouyinDataService,
+    readonly instagramDataService: InstagramDataService,
     readonly tiktokDataService: TiktokDataService,
     readonly xhsDataService: XhsDataService,
     readonly youtubeDataService: YoutubeDataService,
@@ -29,6 +31,7 @@ export class DataCubeController {
   ) {
     this.dataCubeMap.set(AccountType.BILIBILI, bilibiliDataService)
     this.dataCubeMap.set(AccountType.Douyin, douyinDataService)
+    this.dataCubeMap.set(AccountType.INSTAGRAM, instagramDataService)
     this.dataCubeMap.set(AccountType.TIKTOK, tiktokDataService)
     this.dataCubeMap.set(AccountType.Xhs, xhsDataService)
     this.dataCubeMap.set(AccountType.YOUTUBE, youtubeDataService)
@@ -163,5 +166,69 @@ export class DataCubeController {
   ) {
     const dataCube = await this.getYoutubeDataCube(accountId)
     return await dataCube.getVideoRetention(accountId, videoId)
+  }
+
+  // ── Instagram-specific deep analytics ──────────────────────────────
+  // 同样仅对 IG 账号有效，路由级硬绑定到 AccountType.INSTAGRAM。
+
+  private async getInstagramDataCube(accountId: string): Promise<InstagramDataService> {
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account)
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    if (account.relayAccountRef) {
+      throw new RelayAccountException(account.relayAccountRef, accountId)
+    }
+    if (account.type !== AccountType.INSTAGRAM) {
+      throw new AppException(ResponseCode.DataCubeAccountTypeNotSupported)
+    }
+    return this.instagramDataService
+  }
+
+  @ApiDoc({
+    summary: 'Instagram Audience Demographics (age × gender, last 30 days)',
+  })
+  @Get('/instagram/audienceDemographics/:accountId')
+  async instagramAudienceDemographics(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getInstagramDataCube(accountId)
+    return await dataCube.getAudienceDemographics(accountId)
+  }
+
+  @ApiDoc({
+    summary: 'Instagram Engaged Audience by Country (last 30 days)',
+  })
+  @Get('/instagram/audienceByCountry/:accountId')
+  async instagramAudienceByCountry(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getInstagramDataCube(accountId)
+    return await dataCube.getAudienceByCountry(accountId)
+  }
+
+  @ApiDoc({
+    summary: 'Instagram Engaged Audience by City (top, last 30 days)',
+  })
+  @Get('/instagram/audienceByCity/:accountId')
+  async instagramAudienceByCity(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getInstagramDataCube(accountId)
+    return await dataCube.getAudienceByCity(accountId)
+  }
+
+  @ApiDoc({
+    summary: 'Instagram Follows / Unfollows breakdown (last 30 days)',
+  })
+  @Get('/instagram/followsBreakdown/:accountId')
+  async instagramFollowsBreakdown(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getInstagramDataCube(accountId)
+    return await dataCube.getFollowsBreakdown(accountId)
   }
 }

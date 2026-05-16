@@ -130,8 +130,12 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
    - 新增 4 个深度维度：`getAudienceDemographics` / `getTrafficSources` / `getDeviceTypes` / `getVideoRetention`
    - 在 `data-cube.controller.ts` 暴露为 4 个 `/channel/dataCube/youtube/*` 端点
    - 依赖 OAuth scope `yt-analytics.readonly`，已在 OAUTH_SCOPES 声明（不需要重新授权）
-8. **Instagram 接 Audience Insights**
-   - 性别/年龄/地区分布、活跃时段
+8. ✅ **Instagram 接 Audience Insights**
+   - `InstagramDataService.getAccountDataBulk` 从空列表 → 真实按日时序（views / reach / likes / comments / shares / saved，最近 30 天）
+   - 新增 4 个深度维度：`getAudienceDemographics`（age × gender） / `getAudienceByCountry` / `getAudienceByCity` / `getFollowsBreakdown`
+   - 在 `data-cube.controller.ts` 暴露为 4 个 `/channel/dataCube/instagram/*` 端点
+   - 同时把 `dataCubeMap.set(AccountType.INSTAGRAM, ...)` 加上（之前 IG service 已 provide，但忘了挂 map，导致通用端点路由不到）
+   - 依赖现有 IG OAuth scope，不需要重新授权
 9. **B 站 用户增量数据 (按日)**
    - 当前 `getAccountDataBulk` 返回 `[]`，B 站官方有 `data-online` 端点
 
