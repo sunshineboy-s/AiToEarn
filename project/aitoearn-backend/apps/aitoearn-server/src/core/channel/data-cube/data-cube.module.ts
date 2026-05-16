@@ -12,11 +12,12 @@ import { FacebookDataService } from './facebook-data.service'
 import { InstagramDataService } from './instagram.service'
 import { ThreadsDataService } from './threads.service'
 import { WxGzhDataService } from './wx-gzh-data.service'
+import { YoutubeAnalyticsController } from './youtube-analytics.controller'
 import { YoutubeDataService } from './youtube-data.service'
 
 @Module({
   imports: [ChannelSharedModule, BilibiliModule, MetaModule, YoutubeModule, WxPlatModule, PinterestModule],
-  controllers: [DataCubeController],
+  controllers: [DataCubeController, YoutubeAnalyticsController],
   providers: [BilibiliDataService, FacebookDataService, InstagramDataService, ThreadsDataService, YoutubeDataService, WxGzhDataService, PinterestDataService],
   exports: [BilibiliDataService, FacebookDataService, InstagramDataService, ThreadsDataService, YoutubeDataService, WxGzhDataService, PinterestDataService],
 })

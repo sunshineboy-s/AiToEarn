@@ -1,16 +1,10 @@
-/*
- * @Author: zhangwei
- * @Date: 2025-05-15 20:59:55
- * @LastEditTime: 2025-05-15 20:59:55
- * @LastEditors: zhangwei
- * @Description: youtube
- */
 import { Module } from '@nestjs/common'
+import { YoutubeAnalyticsService } from './youtube-analytics.service'
 import { YoutubeApiService } from './youtube-api.service'
 
 @Module({
   imports: [],
-  providers: [YoutubeApiService],
-  exports: [YoutubeApiService],
+  providers: [YoutubeApiService, YoutubeAnalyticsService],
+  exports: [YoutubeApiService, YoutubeAnalyticsService],
 })
 export class YoutubeApiModule {}
