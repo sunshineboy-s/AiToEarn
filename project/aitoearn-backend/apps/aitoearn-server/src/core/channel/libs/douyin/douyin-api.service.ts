@@ -5,9 +5,17 @@ import { config } from '../../../../config'
 import {
   DouyinAccessTokenInfo,
   DouyinClientTokenInfo,
+  DouyinDataEnvelope,
+  DouyinItemBaseResp,
+  DouyinItemCommentResp,
+  DouyinItemLikeResp,
+  DouyinItemPlayResp,
+  DouyinItemShareResp,
   DouyinOpenTicketInfo,
   DouyinShareSchemaOptions,
+  DouyinUserFansResp,
   DouyinUserInfo,
+  DouyinVideoListResp,
   DouyRefreshTokenInfo,
 } from './common'
 
@@ -435,60 +443,256 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
     return crypto.createHash('md5').update(signStr).digest('hex')
   }
 
+  // ============================================================
+  // 数据开放服务 (Data Open API)
+  // 所有接口共用的请求规范：
+  // - GET 方法
+  // - header `access-token`: 用户 access_token
+  // - query `open_id`: 用户的 open_id
+  // - 当 envelope.data.error_code !== 0 抛 Error
+  //
+  // 字段名根据公开 SDK 和文档样例总结，首次接入请用
+  // scripts/probe-douyin.ts 校验一次
+  // ============================================================
+
+  /** 抖音数据开放 API 通用请求 */
+  private async dataApiGet<T>(
+    accessToken: string,
+    path: string,
+    query: Record<string, string | number>,
+  ): Promise<T> {
+    const start = Date.now()
+    try {
+      const res = await axios.get<DouyinDataEnvelope<T>>(
+        `https://open.douyin.com${path}`,
+        {
+          params: query,
+          headers: {
+            'Content-Type': 'application/json',
+            'access-token': accessToken,
+          },
+        },
+      )
+      const errCode = res.data.data?.error_code ?? res.data.extra?.error_code
+      if (errCode !== 0) {
+        const desc
+          = res.data.data?.description
+            || res.data.extra?.description
+            || `douyin data api error_code=${errCode}`
+        this.logger.error({
+          path,
+          query,
+          latencyMs: Date.now() - start,
+          errorCode: errCode,
+          description: desc,
+        })
+        throw new Error(desc)
+      }
+      this.logger.log({
+        path,
+        query: { open_id: query['open_id'] },
+        latencyMs: Date.now() - start,
+      })
+      return res.data.data
+    }
+    catch (error) {
+      // axios 抛异常时也走这里
+      if ((error as Error).message?.startsWith('douyin data api'))
+        throw error
+      this.logger.error({
+        path,
+        query,
+        latencyMs: Date.now() - start,
+        error: String(error),
+      })
+      throw new Error(String(error))
+    }
+  }
+
+  /**
+   * 获取用户视频列表
+   * GET /api/douyin/v1/video/video_list/
+   * @param accessToken 用户 access_token
+   * @param openId 用户 open_id
+   * @param cursor 翻页游标，首次传 0
+   * @param count 每页数量，最大 20
+   */
+  async getVideoList(
+    accessToken: string,
+    openId: string,
+    cursor = 0,
+    count = 20,
+  ): Promise<DouyinVideoListResp> {
+    return this.dataApiGet<DouyinVideoListResp>(
+      accessToken,
+      '/api/douyin/v1/video/video_list/',
+      { open_id: openId, cursor, count },
+    )
+  }
+
   /**
    * 获取用户数据
-   * @param accessToken
-   * @returns
+   *
+   * 抖音数据开放服务把"账号粉丝"和"作品总数"拆成了不同端点：
+   * - 粉丝总数：GET /data/external/user/fans/
+   * - 作品总数：通过 /api/douyin/v1/video/video_list/ 翻页累计；当 has_more=false 时即为总数
+   *
+   * 此方法封装两次请求，返回与原 stub 形状兼容的对象：
+   * { arc_passed_total, follower, following }
+   *
+   * NOTE follower 取最近一天的 total_fans；following 端点抖音开放平台未提供（个人主页才暴露），
+   *      因此恒为 0。如需精确"关注数"，需要走另一组私域接口或忽略。
    */
-  async getUserStat(accessToken: string) {
-    this.logger.log('getUserStat', accessToken)
+  async getUserStat(accessToken: string, openId: string) {
+    // 粉丝总数：拉最近 1 天即可
+    const today = new Date()
+    const dateStr = (d: Date) => d.toISOString().slice(0, 10)
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+
+    const fansResp = await this.dataApiGet<DouyinUserFansResp>(
+      accessToken,
+      '/data/external/user/fans/',
+      {
+        open_id: openId,
+        date_type: 7,
+        start_date: dateStr(yesterday),
+        end_date: dateStr(today),
+      },
+    )
+    const follower
+      = fansResp.result_list?.[fansResp.result_list.length - 1]?.total_fans ?? 0
+
+    // 作品总数：翻页累计，限制最多 50 页（1000 条）
+    let cursor = 0
+    let arcCount = 0
+    for (let i = 0; i < 50; i++) {
+      const page = await this.getVideoList(accessToken, openId, cursor, 20)
+      arcCount += page.list?.length ?? 0
+      if (!page.has_more)
+        break
+      cursor = page.cursor
+    }
+
     return {
-      arc_passed_total: 0,
-      follower: 0,
+      arc_passed_total: arcCount,
+      follower,
       following: 0,
     }
   }
 
   /**
-   * 获取稿件数据
-   * @param accessToken
-   * @param resourceId
-   * @returns
+   * 获取稿件数据（基础累计：截至当日）
+   * GET /data/external/item/base/
+   * @param accessToken 用户 access_token
+   * @param openId 用户 open_id
+   * @param itemId 视频 item_id
+   * @returns 与原 stub 形状兼容的对象：{ view, like, reply, share, favorite, ... }
    */
   async getArcStat(
     accessToken: string,
-    resourceId: string,
+    openId: string,
+    itemId: string,
   ) {
-    this.logger.log('getArcStat', accessToken, resourceId)
+    const today = new Date()
+    const dateStr = (d: Date) => d.toISOString().slice(0, 10)
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+
+    const resp = await this.dataApiGet<DouyinItemBaseResp>(
+      accessToken,
+      '/data/external/item/base/',
+      {
+        open_id: openId,
+        item_id: itemId,
+        date_type: 7,
+        start_date: dateStr(yesterday),
+        end_date: dateStr(today),
+      },
+    )
+
+    const latest = resp.result_list?.[resp.result_list.length - 1]
     return {
       coin: 0,
       danmaku: 0,
-      favorite: 0,
-      like: 0,
+      favorite: latest?.total_collect ?? 0,
+      like: latest?.total_like ?? 0,
       ptime: 0,
-      reply: 0,
-      share: 0,
+      reply: latest?.total_comment ?? 0,
+      share: latest?.total_share ?? 0,
       title: '',
-      view: 0,
+      view: latest?.total_play ?? 0,
     }
   }
 
   /**
-   * 获取稿件增量数据数据
-   * @param accessToken
-   * @returns
+   * 获取稿件按日增量数据（默认最近 7 天）
+   * 通过四个独立的端点合并：play / like / comment / share
+   *
+   * NOTE 抖音没有提供"全字段一次拿完"的端点，需要分别请求 4 个 path。
+   *      返回 { daily, summary }：
+   *        - daily: 按日数组，方便上层做时序图
+   *        - summary: 7 天汇总（与旧 stub 形状兼容，作为返回值的一部分）
    */
-  async getArcIncStat(accessToken: string) {
-    this.logger.log('getArcIncStat', accessToken)
+  async getArcIncStat(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    days = 7,
+  ) {
+    const today = new Date()
+    const dateStr = (d: Date) => d.toISOString().slice(0, 10)
+    const startAt = new Date(today.getTime() - days * 24 * 60 * 60 * 1000)
+    const params = {
+      open_id: openId,
+      item_id: itemId,
+      date_type: days,
+      start_date: dateStr(startAt),
+      end_date: dateStr(today),
+    }
+
+    const [playR, likeR, commentR, shareR] = await Promise.all([
+      this.dataApiGet<DouyinItemPlayResp>(accessToken, '/data/external/item/play/', params),
+      this.dataApiGet<DouyinItemLikeResp>(accessToken, '/data/external/item/like/', params),
+      this.dataApiGet<DouyinItemCommentResp>(accessToken, '/data/external/item/comment/', params),
+      this.dataApiGet<DouyinItemShareResp>(accessToken, '/data/external/item/share/', params),
+    ])
+
+    // 以 play.result_list 为基准 join 其他三个端点（按 date 对齐）
+    const byDate = new Map<string, { play: number, like: number, comment: number, share: number }>()
+    const ensure = (date: string) => {
+      let row = byDate.get(date)
+      if (!row) {
+        row = { play: 0, like: 0, comment: 0, share: 0 }
+        byDate.set(date, row)
+      }
+      return row
+    }
+    for (const r of playR.result_list ?? [])
+      ensure(r.date).play = r.play ?? 0
+    for (const r of likeR.result_list ?? [])
+      ensure(r.date).like = r.like ?? 0
+    for (const r of commentR.result_list ?? [])
+      ensure(r.date).comment = r.comment ?? 0
+    for (const r of shareR.result_list ?? [])
+      ensure(r.date).share = r.share ?? 0
+
+    const daily = [...byDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date, ...v }))
+
+    const sum = (k: 'play' | 'like' | 'comment' | 'share') =>
+      daily.reduce((acc, x) => acc + x[k], 0)
+
     return {
-      inc_click: 0,
+      daily,
+      // 兼容原 stub 的形状
+      inc_click: sum('play'),
       inc_coin: 0,
       inc_dm: 0,
       inc_elec: 0,
       inc_fav: 0,
-      inc_like: 0,
-      inc_reply: 0,
-      inc_share: 0,
+      inc_like: sum('like'),
+      inc_reply: sum('comment'),
+      inc_share: sum('share'),
     }
   }
 

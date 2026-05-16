@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Logger,
-  Param,
   Post,
   Query,
   Res,
@@ -236,12 +235,16 @@ export class DouyinController {
 
   @ApiDoc({
     summary: 'Get Archive Increment Statistics',
+    query: GetArcStatDto.schema,
   })
-  @Get('stat/inc/arc/:accountId')
+  @Get('stat/inc/arc')
   async getArcIncStat(
     @GetToken() token: TokenInfo,
-    @Param('accountId') accountId: string,
+    @Query() query: GetArcStatDto,
   ) {
-    return this.douyinService.getArcIncStat(accountId)
+    return this.douyinService.getArcIncStat(
+      query.accountId,
+      query.resourceId,
+    )
   }
 }

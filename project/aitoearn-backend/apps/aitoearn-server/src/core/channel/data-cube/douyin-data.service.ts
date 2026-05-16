@@ -8,11 +8,14 @@ import { DataCubeBase } from './data.base'
 /**
  * 抖音 - 统计数据
  *
- * NOTE: 数据来源是抖音开放平台的 user/item 数据 API。
- * 目前 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 是占位实现
- * （返回 0），上层 data-cube 已经按真实形状 (`follower / arc_passed_total / view ...`)
- * 接好。后续在 `DouyinApiService` 里把 HTTP 调用补完，本服务无需任何改动即可
- * 自动返回真实数据。
+ * 数据来源：抖音开放平台数据开放服务 (DataOpen API)
+ * - 粉丝总数：GET /data/external/user/fans/
+ * - 作品列表：GET /api/douyin/v1/video/video_list/  (用于推断作品总数)
+ * - 单作品基础：GET /data/external/item/base/
+ * - 单作品按日：GET /data/external/item/{play,like,comment,share}/
+ *
+ * 调用链：DouyinDataService → DouyinService → DouyinApiService
+ * 详见 libs/douyin/douyin-api.service.ts 的 dataApiGet 帮助方法。
  */
 @Injectable()
 export class DouyinDataService extends DataCubeBase {
@@ -42,6 +45,9 @@ export class DouyinDataService extends DataCubeBase {
   }
 
   async getAccountDataBulk(accountId: string) {
+    // 账号粉丝按日时序：data-cube 增量端点暂只接入"粉丝"。其它账号级指标
+    // (播放/点赞/分享) 抖音开放平台仅提供单作品维度，需要遍历作品聚合，
+    // 性价比低，留作 P2。
     this.logger.log('getAccountDataBulk', accountId)
     return {
       list: [],
@@ -60,11 +66,16 @@ export class DouyinDataService extends DataCubeBase {
   }
 
   async getArcDataBulk(accountId: string, dataId: string) {
-    this.logger.log('getArcDataBulk', accountId, dataId)
+    const res = await this.douyinService.getArcIncStat(accountId, dataId)
     return {
       recordId: '',
-      dataId: '',
-      list: [],
+      dataId,
+      list: res.daily.map(d => ({
+        playNum: d.play,
+        likeNum: d.like,
+        commentNum: d.comment,
+        shareNum: d.share,
+      })),
     }
   }
 }
