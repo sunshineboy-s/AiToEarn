@@ -10,6 +10,7 @@ import { ReplyToCommentAnswer } from './ai.dto'
 import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
 import { EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
+import { DouyinEngagementProvider } from './providers/douyin.provider'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
@@ -23,6 +24,7 @@ export class EngagementService {
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
+    douyinProvider: DouyinEngagementProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly queueService: QueueService,
@@ -33,6 +35,7 @@ export class EngagementService {
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('douyin', douyinProvider)
   }
 
   private async checkRelayAccount(accountId: string) {
