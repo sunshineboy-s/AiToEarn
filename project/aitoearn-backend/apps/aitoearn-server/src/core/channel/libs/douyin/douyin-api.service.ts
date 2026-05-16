@@ -436,59 +436,220 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
   }
 
   /**
-   * 获取用户数据
+   * 获取用户粉丝数 / 作品数等统计信息
+   * 抖音开放平台：GET /data/external/user/fans/
+   * https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/account-data
    * @param accessToken
-   * @returns
    */
   async getUserStat(accessToken: string) {
-    this.logger.log('getUserStat', accessToken)
-    return {
-      arc_passed_total: 0,
-      follower: 0,
-      following: 0,
+    const startTime = Date.now()
+    try {
+      const fansRes = await axios.get<{
+        data: { error_code: number, description: string, fans_count?: number, total_count?: number, following_count?: number }
+      }>('https://open.douyin.com/data/external/user/fans/', {
+        headers: { 'access-token': accessToken },
+        params: { date_type: 7 },
+      })
+
+      const itemRes = await axios.get<{
+        data: { error_code: number, description: string, result_list?: { item_count?: number }[] }
+      }>('https://open.douyin.com/data/external/user/item/', {
+        headers: { 'access-token': accessToken },
+        params: { date_type: 7 },
+      })
+
+      const fansData = fansRes.data.data
+      const itemData = itemRes.data.data
+
+      if (fansData.error_code !== 0) {
+        this.logger.warn({
+          path: 'douyin getUserStat fans error',
+          data: fansData,
+          latency: Date.now() - startTime,
+        })
+      }
+
+      // 从 item 接口取作品总数（取最近一天的快照）
+      const latestItemCount = itemData.result_list?.[itemData.result_list.length - 1]?.item_count ?? 0
+
+      return {
+        arc_passed_total: latestItemCount,
+        follower: fansData.fans_count ?? fansData.total_count ?? 0,
+        following: fansData.following_count ?? 0,
+      }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin getUserStat error',
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      return {
+        arc_passed_total: 0,
+        follower: 0,
+        following: 0,
+      }
     }
   }
 
   /**
-   * 获取稿件数据
+   * 获取单个视频/稿件的统计数据
+   * 抖音开放平台：GET /data/external/item/base/
+   * https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/video-data/external-video-data
    * @param accessToken
-   * @param resourceId
-   * @returns
+   * @param resourceId 视频 item_id
    */
   async getArcStat(
     accessToken: string,
     resourceId: string,
   ) {
-    this.logger.log('getArcStat', accessToken, resourceId)
-    return {
-      coin: 0,
-      danmaku: 0,
-      favorite: 0,
-      like: 0,
-      ptime: 0,
-      reply: 0,
-      share: 0,
-      title: '',
-      view: 0,
+    const startTime = Date.now()
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          result_list?: {
+            play?: number
+            like?: number
+            comment?: number
+            share?: number
+            favourite?: number
+            title?: string
+          }[]
+        }
+      }>('https://open.douyin.com/data/external/item/base/', {
+        headers: { 'access-token': accessToken },
+        params: { item_id: resourceId },
+      })
+
+      const data = res.data.data
+      if (data.error_code !== 0) {
+        this.logger.warn({
+          path: 'douyin getArcStat error',
+          resourceId,
+          data,
+          latency: Date.now() - startTime,
+        })
+        return {
+          coin: 0,
+          danmaku: 0,
+          favorite: 0,
+          like: 0,
+          ptime: 0,
+          reply: 0,
+          share: 0,
+          title: '',
+          view: 0,
+        }
+      }
+
+      const item = data.result_list?.[0]
+      return {
+        coin: 0, // 抖音没有投币概念
+        danmaku: 0, // 抖音没有弹幕概念
+        favorite: item?.favourite ?? 0,
+        like: item?.like ?? 0,
+        ptime: 0, // 发布时间需要另外接口
+        reply: item?.comment ?? 0,
+        share: item?.share ?? 0,
+        title: item?.title ?? '',
+        view: item?.play ?? 0,
+      }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin getArcStat error',
+        resourceId,
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      return {
+        coin: 0,
+        danmaku: 0,
+        favorite: 0,
+        like: 0,
+        ptime: 0,
+        reply: 0,
+        share: 0,
+        title: '',
+        view: 0,
+      }
     }
   }
 
   /**
-   * 获取稿件增量数据数据
+   * 获取用户作品增量数据
+   * 抖音开放平台：GET /data/external/user/item/
    * @param accessToken
-   * @returns
    */
   async getArcIncStat(accessToken: string) {
-    this.logger.log('getArcIncStat', accessToken)
-    return {
-      inc_click: 0,
-      inc_coin: 0,
-      inc_dm: 0,
-      inc_elec: 0,
-      inc_fav: 0,
-      inc_like: 0,
-      inc_reply: 0,
-      inc_share: 0,
+    const startTime = Date.now()
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          result_list?: {
+            new_play?: number
+            new_like?: number
+            new_comment?: number
+            new_share?: number
+            new_favourite?: number
+          }[]
+        }
+      }>('https://open.douyin.com/data/external/user/item/', {
+        headers: { 'access-token': accessToken },
+        params: { date_type: 1 },
+      })
+
+      const data = res.data.data
+      if (data.error_code !== 0) {
+        this.logger.warn({
+          path: 'douyin getArcIncStat error',
+          data,
+          latency: Date.now() - startTime,
+        })
+        return {
+          inc_click: 0,
+          inc_coin: 0,
+          inc_dm: 0,
+          inc_elec: 0,
+          inc_fav: 0,
+          inc_like: 0,
+          inc_reply: 0,
+          inc_share: 0,
+        }
+      }
+
+      const latest = data.result_list?.[data.result_list.length - 1]
+      return {
+        inc_click: latest?.new_play ?? 0,
+        inc_coin: 0,
+        inc_dm: 0,
+        inc_elec: 0,
+        inc_fav: latest?.new_favourite ?? 0,
+        inc_like: latest?.new_like ?? 0,
+        inc_reply: latest?.new_comment ?? 0,
+        inc_share: latest?.new_share ?? 0,
+      }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin getArcIncStat error',
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      return {
+        inc_click: 0,
+        inc_coin: 0,
+        inc_dm: 0,
+        inc_elec: 0,
+        inc_fav: 0,
+        inc_like: 0,
+        inc_reply: 0,
+        inc_share: 0,
+      }
     }
   }
 
