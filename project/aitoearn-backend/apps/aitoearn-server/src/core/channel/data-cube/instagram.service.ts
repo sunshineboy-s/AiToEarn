@@ -9,7 +9,7 @@ import {
   InstagramMediaInsightsRequest,
 } from '../libs/instagram/instagram.interfaces'
 import { InstagramService } from '../platforms/meta/instagram.service'
-import { DataCubeBase } from './data.base'
+import { AudienceDemographicsRow, DataCubeBase } from './data.base'
 
 /**
  * 把同一个时间戳下的多个 metric 拍平成一行，便于上层直接 JSON 返回。
@@ -176,14 +176,14 @@ export class InstagramDataService extends DataCubeBase {
   /**
    * 受众画像 — 性别 × 年龄分布
    *
+   * 实现 DataCubeBase.getAudienceDemographics 的 IG 版本。
+   * value 是 engaged audience 的绝对计数，unit='count'。
+   *
    * 来源：IG Graph API `engaged_audience_demographics` metric
    *      with breakdown=age,gender, metric_type=total_value, timeframe=last_30_days
-   *
    * 文档：https://developers.facebook.com/docs/instagram-platform/api-reference/instagram-user/insights
-   *
-   * 返回 [{ age: '25-34', gender: 'M', value: 123 }, ...]
    */
-  async getAudienceDemographics(accountId: string) {
+  override async getAudienceDemographics(accountId: string): Promise<AudienceDemographicsRow[]> {
     try {
       const res = await this.instagramService.getAccountInsights(accountId, {
         metric: 'engaged_audience_demographics',
@@ -194,7 +194,12 @@ export class InstagramDataService extends DataCubeBase {
         timeframe: 'last_30_days' as any,
       } as InstagramInsightsRequest)
       const result = res?.data?.find(d => d.name === 'engaged_audience_demographics')
-      return flattenBreakdown(result)
+      return flattenBreakdown(result).map(row => ({
+        ageGroup: typeof row['age'] === 'string' ? row['age'] : undefined,
+        gender: typeof row['gender'] === 'string' ? row['gender'] : undefined,
+        value: Number(row['value']) || 0,
+        unit: 'count' as const,
+      }))
     }
     catch (err) {
       this.logger.warn(`getAudienceDemographics failed for ${accountId}: ${(err as Error).message}`)

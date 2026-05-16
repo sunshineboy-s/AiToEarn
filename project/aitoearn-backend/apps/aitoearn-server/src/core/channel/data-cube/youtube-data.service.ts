@@ -4,7 +4,7 @@ import { AccountType, AppException } from '@yikart/common'
 import { AccountRepository } from '@yikart/mongodb'
 import { ChannelAccountDataBulk, ChannelArcDataBulk } from '../platforms/common'
 import { YoutubeService } from '../platforms/youtube/youtube.service'
-import { DataCubeBase } from './data.base'
+import { AudienceDemographicsRow, DataCubeBase } from './data.base'
 
 function isYoutubeResponse(value: unknown): value is { items?: unknown[] } {
   return value !== null && typeof value === 'object' && !(value instanceof AppException) && 'items' in value
@@ -181,12 +181,13 @@ export class YoutubeDataService extends DataCubeBase {
    * 受众画像 — 按年龄/性别分布
    * https://developers.google.com/youtube/analytics/dimensions#Demographics_Dimensions
    *
-   * 返回形如 [{ ageGroup: 'age25-34', gender: 'male', viewerPercentage: 12.5 }, ...]
+   * 实现 DataCubeBase.getAudienceDemographics 的 YouTube 版本。
+   * value 是 viewerPercentage（0-100），unit='percentage'。
    */
-  async getAudienceDemographics(
+  override async getAudienceDemographics(
     accountId: string,
     options: { startDate?: string, endDate?: string } = {},
-  ) {
+  ): Promise<AudienceDemographicsRow[]> {
     const today = new Date()
     const start = new Date(today)
     start.setDate(today.getDate() - 90)
@@ -203,7 +204,12 @@ export class YoutubeDataService extends DataCubeBase {
 
     if (!isAnalyticsResponse(res))
       return []
-    return flattenAnalytics(res)
+    return flattenAnalytics(res).map(row => ({
+      ageGroup: typeof row['ageGroup'] === 'string' ? row['ageGroup'] : undefined,
+      gender: typeof row['gender'] === 'string' ? row['gender'] : undefined,
+      value: Number(row['viewerPercentage']) || 0,
+      unit: 'percentage' as const,
+    }))
   }
 
   /**

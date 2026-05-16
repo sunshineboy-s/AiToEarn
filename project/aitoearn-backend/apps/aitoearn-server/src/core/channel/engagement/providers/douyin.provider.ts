@@ -126,6 +126,7 @@ export class DouyinEngagementProvider implements EngagementProvider {
       },
       createdAt: new Date(c.create_time * 1000).toISOString(),
       hasReplies: (c.reply_comment_total ?? 0) > 0,
+      extra: { itemId: postId, rawCommentId: c.comment_id },
     }))
 
     return {
@@ -166,6 +167,7 @@ export class DouyinEngagementProvider implements EngagementProvider {
       },
       createdAt: new Date(c.create_time * 1000).toISOString(),
       hasReplies: false,
+      extra: { itemId: decoded.itemId, rawCommentId: c.comment_id },
     }))
 
     return {

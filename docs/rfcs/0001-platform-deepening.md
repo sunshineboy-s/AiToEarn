@@ -115,9 +115,21 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 
 ### 6.2 P1 抽通用底座
 
-5. **抽 `PlatformAnalyticsAdapter` 接口**
-   - 把 `data.base.ts` 的 5 个方法 + Analytics 时序数据 + 受众画像 + 内容榜单 统一为一个 base
-   - 每个平台填自己的实现，避免一个平台一份"抄过来改改"
+5. ✅ **抽 `PlatformAnalyticsAdapter` 接口（最小可用版）**
+   - `data.base.ts`：新增可选方法 `getAudienceDemographics(accountId)`，
+     base class 提供"返回空数组"的 fallback；YouTube 和 IG 的实现改为
+     `override`，并把返回形状统一为 `AudienceDemographicsRow[]`
+     （`{ ageGroup, gender, value, unit: 'percentage' | 'count' }`）
+   - **故意不**把 `getTrafficSources / getDeviceTypes /
+     getVideoRetention / getAudienceByCountry / getFollowsBreakdown`
+     提到 base 上——这些是平台特有 API，强行收口会逼着十几个 service
+     写假的"return []"，反而让"这个能力到底有没有"信号丢失。
+     这条原则在 base class 顶部的 JSDoc 里写明
+   - `engagement.interface.ts`：`EngagementComment` 加可选字段 `extra:
+     Record<string, string>`，给"reply 需要超过 commentId 的平台"
+     一条干净的退路；`commentId` 显式标为 opaque。Douyin provider
+     现在同时填 `extra.itemId` 和保留旧的 `itemId:commentId` 编码
+     id（向后兼容），等所有调用方迁移完再 deprecate 旧编码
 6. **抽 `BrowserAutomationModule`**
    - 独立成 `apps/aitoearn-browser-worker`（Playwright + Chromium 镜像）
    - 给 XHS / 视频号 / 抖音的兜底通道用
