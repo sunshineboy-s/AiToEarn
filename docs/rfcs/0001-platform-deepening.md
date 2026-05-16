@@ -136,14 +136,18 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
    - 在 `data-cube.controller.ts` 暴露为 4 个 `/channel/dataCube/instagram/*` 端点
    - 同时把 `dataCubeMap.set(AccountType.INSTAGRAM, ...)` 加上（之前 IG service 已 provide，但忘了挂 map，导致通用端点路由不到）
    - 依赖现有 IG OAuth scope，不需要重新授权
-9. **B 站 用户增量数据 (按日)**
-   - 当前 `getAccountDataBulk` 返回 `[]`，B 站官方有 `data-online` 端点
+9. ✅ **B 站 用户增量数据 (开放平台限制下的最佳方案)**
+   - `BilibiliDataService.getAccountDataBulk` 从 `[]` → 调用 `arc/inc-stats` 把 8 项指标包装成一行返回
+   - **重要限制**：B 站开放平台不提供按日时序 API，`inc-stats` 只给"昨天一整天的聚合"，没有日期粒度也没有历史。`list` 是 1 元素，不是 30 元素
+   - 完整的"按日历史"需要起一个 cron 每天 fetch + 写 DB 累积，这是 P3 工作（见 §6.4 #13）
+   - 同步删除了之前 RFC 错误地引用的 `data-online` 端点——那是 cookie-based 创作者中心 API，不是 OAuth 开放平台
 
 ### 6.4 P3 待决策
 
 10. **快手 / 视频号 / LinkedIn data-cube** — 需评审 API 可用性
 11. **TikTok 增量数据** — 需评估 Research API 申请成本
 12. **闲鱼** — 见 §5，原则上不做
+13. **B 站按日时序的本地累积**：B 站开放平台只给昨日聚合（见 §6.3 #9），要拿到 30 天历史，必须起一个每日 cron 把 `inc-stats` 写到 DB 里自己累积。需要单独评估存储 / 调度方案。
 
 ## 7. 设计准则（写在 base 类里的"宪法"）
 
