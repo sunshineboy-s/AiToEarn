@@ -5,11 +5,33 @@ import { config } from '../../../../config'
 import {
   DouyinAccessTokenInfo,
   DouyinClientTokenInfo,
+  DouyinFansDataPoint,
+  DouyinItemBaseStat,
+  DouyinItemDailyStat,
   DouyinOpenTicketInfo,
   DouyinShareSchemaOptions,
   DouyinUserInfo,
   DouyRefreshTokenInfo,
 } from './common'
+
+/**
+ * 抖音开放平台数据接口的统一返回包装。
+ * 文档：https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission
+ */
+interface DouyinDataEnvelope<T> {
+  data: T & {
+    error_code?: number
+    description?: string
+  }
+  extra: {
+    error_code: number // 0 表示成功
+    description: string
+    sub_error_code: number
+    sub_description: string
+    logid: string
+    now: number
+  }
+}
 
 @Injectable()
 export class DouyinApiService {
@@ -29,7 +51,10 @@ export class DouyinApiService {
    * @returns
    */
   getAuthPage(redirectURL: string, taskId: string) {
-    const url = `https://open.douyin.com/platform/oauth/connect?client_key=${this.appId}&response_type=code&scope=user_info&redirect_uri=${redirectURL}&state=${taskId}`
+    // 数据 API 需要额外申请 scope，且需要在抖音开放平台完成应用审核。
+    // 对未通过 scope 审核的应用，开放平台会自动忽略未授权 scope，不影响 user_info 部分。
+    const scopes = ['user_info', 'data.external.user', 'data.external.item.base']
+    const url = `https://open.douyin.com/platform/oauth/connect?client_key=${this.appId}&response_type=code&scope=${scopes.join(',')}&redirect_uri=${redirectURL}&state=${taskId}`
     return {
       url,
       taskId,
@@ -364,14 +389,6 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
       query.append('signature', signature)
       query.append('share_type', 'h5')
 
-      // if (video_path) {
-      //   query.append('video_path', getZhFileUrl(video_path))
-      //   query.append('share_to_publish', '1')
-      // }
-      // if (image_list_path) {
-      //   query.append('image_list_path', JSON.stringify(image_list_path.map(getZhFileUrl)))
-      // }
-
       if (video_path) {
         query.append('video_path', video_path)
         query.append('share_to_publish', '1')
@@ -436,31 +453,120 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
   }
 
   /**
-   * 获取用户数据
-   * @param accessToken
-   * @returns
+   * 调用抖音开放平台数据 API 的统一封装
+   *
+   * - 所有 data API 请求都需要 `access-token` header + `open_id` query param
+   * - 成功时 `extra.error_code === 0`
+   * - 失败时返回 envelope 仍是 200，需读 `extra.error_code` / `description`
+   *
+   * 错误处理策略：fail-soft —— 即使业务报错（如未授权 scope / open_id 不匹配 /
+   * 数据为空）也只打 warn 日志并由调用方决定 fallback。这样不会破坏现有的
+   * data-cube 接口契约（返回 0 而不是 throw）。
    */
-  async getUserStat(accessToken: string) {
-    this.logger.log('getUserStat', accessToken)
-    return {
-      arc_passed_total: 0,
-      follower: 0,
-      following: 0,
+  private async callDataApi<T>(
+    path: string,
+    accessToken: string,
+    openId: string,
+    params: Record<string, string | number | undefined> = {},
+  ): Promise<DouyinDataEnvelope<T> | null> {
+    const query = new URLSearchParams()
+    query.append('open_id', openId)
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== '') {
+        query.append(key, String(value))
+      }
+    }
+    const url = `https://open.douyin.com${path}?${query.toString()}`
+
+    try {
+      const res = await axios.get<DouyinDataEnvelope<T>>(url, {
+        headers: {
+          'access-token': accessToken,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10_000,
+      })
+      const env = res.data
+      if (env?.extra?.error_code !== 0) {
+        this.logger.warn({
+          path: `douyin data api ${path} returned error`,
+          extra: env?.extra,
+          // 不打 access_token，但保留 open_id 以便排障
+          openId,
+          params,
+        })
+        return null
+      }
+      return env
+    }
+    catch (error) {
+      // 网络/HTTP 错误 → 也走 fail-soft，让 data-cube 返回 0 而不是把整个请求挂掉
+      this.logger.error({
+        path: `douyin data api ${path} request failed`,
+        message: error instanceof Error ? error.message : String(error),
+        openId,
+        params,
+      })
+      return null
     }
   }
 
   /**
-   * 获取稿件数据
-   * @param accessToken
-   * @param resourceId
-   * @returns
+   * 获取用户数据（账号粉丝/作品总数）
+   *
+   * 抖音开放平台没有"全量账号统计"的单一端点。这里取最近 30 天的粉丝数据点的
+   * 末位 `total_fans` 作为粉丝数；作品总数走 `data/external/user/item`。
+   *
+   * - GET /data/external/user/fans?open_id=xxx&date_type=30
+   * - GET /data/external/user/item?open_id=xxx&date_type=30
+   *
+   * @returns 与历史 stub 兼容的字段（arc_passed_total / follower / following）。
+   *          API 不返回 following 时填 0 — 这是数据 API 的客观约束。
    */
-  async getArcStat(
-    accessToken: string,
-    resourceId: string,
-  ) {
-    this.logger.log('getArcStat', accessToken, resourceId)
+  async getUserStat(accessToken: string, openId: string) {
+    const fallback = {
+      arc_passed_total: 0,
+      follower: 0,
+      following: 0,
+    }
+    if (!openId) {
+      this.logger.warn('douyin getUserStat: empty openId, returning fallback')
+      return fallback
+    }
+
+    const [fansEnv, itemEnv] = await Promise.all([
+      this.callDataApi<{ result_list: DouyinFansDataPoint[] }>(
+        '/data/external/user/fans/',
+        accessToken,
+        openId,
+        { date_type: 30 },
+      ),
+      this.callDataApi<{ result_list: { new_issue: number, total_issue?: number, date: string }[] }>(
+        '/data/external/user/item/',
+        accessToken,
+        openId,
+        { date_type: 30 },
+      ),
+    ])
+
+    const lastFans = fansEnv?.data?.result_list?.at(-1)
+    const itemList = itemEnv?.data?.result_list || []
+    const arcPassedTotal = itemList.reduce((sum, p) => sum + (p.new_issue || 0), 0)
+
     return {
+      arc_passed_total: arcPassedTotal,
+      follower: lastFans?.total_fans ?? 0,
+      following: 0, // 抖音数据 API 不暴露 following 数；保留 0 以兼容历史契约
+    }
+  }
+
+  /**
+   * 获取稿件数据（单条作品的累计 stat）
+   *
+   * - GET /data/external/item/base?open_id=xxx&item_id=xxx
+   */
+  async getArcStat(accessToken: string, resourceId: string, openId?: string) {
+    const fallback = {
       coin: 0,
       danmaku: 0,
       favorite: 0,
@@ -471,16 +577,46 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
       title: '',
       view: 0,
     }
+    if (!openId || !resourceId) {
+      this.logger.warn('douyin getArcStat: empty openId or resourceId, returning fallback')
+      return fallback
+    }
+
+    const env = await this.callDataApi<DouyinItemBaseStat>(
+      '/data/external/item/base/',
+      accessToken,
+      openId,
+      { item_id: resourceId },
+    )
+    if (!env) {
+      return fallback
+    }
+
+    const stat = env.data
+    return {
+      coin: 0, // 抖音不分硬币 — 仅 B 站概念，保留以兼容跨平台契约
+      danmaku: 0, // 抖音作品默认无弹幕计数
+      favorite: stat.favourite_count ?? 0,
+      like: stat.like_count ?? stat.digg_count ?? 0,
+      ptime: stat.publish_time ?? 0,
+      reply: stat.comment_count ?? 0,
+      share: stat.share_count ?? 0,
+      title: stat.title ?? '',
+      view: stat.play_count ?? stat.video_play_count ?? 0,
+    }
   }
 
   /**
-   * 获取稿件增量数据数据
-   * @param accessToken
-   * @returns
+   * 获取稿件增量数据（账号最近 30 天内所有作品的合计增量）
+   *
+   * 当前实现：累加最近 30 天 daily 列表里 like/comment/share/play 的增量。
+   * 抖音的硬币/弹幕/电池字段都不存在，这里保留 0 以保持跨平台返回契约一致。
+   *
+   * 注意：每个指标单独一个端点。这里一次性并发 5 个请求；如果某个端点失败
+   * 走 fail-soft 仅该指标返回 0。
    */
-  async getArcIncStat(accessToken: string) {
-    this.logger.log('getArcIncStat', accessToken)
-    return {
+  async getArcIncStat(accessToken: string, openId?: string) {
+    const fallback = {
       inc_click: 0,
       inc_coin: 0,
       inc_dm: 0,
@@ -490,6 +626,89 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
       inc_reply: 0,
       inc_share: 0,
     }
+    if (!openId) {
+      this.logger.warn('douyin getArcIncStat: empty openId, returning fallback')
+      return fallback
+    }
+
+    const sumDailyMetric = async (path: string, metricKey: string) => {
+      const env = await this.callDataApi<{
+        result_list: Array<Record<string, number | string>>
+      }>(path, accessToken, openId, { date_type: 30 })
+      const list = env?.data?.result_list || []
+      return list.reduce<number>((sum, point) => {
+        const v = point?.[metricKey]
+        return sum + (typeof v === 'number' ? v : 0)
+      }, 0)
+    }
+
+    const [
+      incLike,
+      incReply,
+      incShare,
+      incFav,
+      incClick,
+    ] = await Promise.all([
+      sumDailyMetric('/data/external/user/like/', 'new_like'),
+      sumDailyMetric('/data/external/user/comment/', 'new_comment'),
+      sumDailyMetric('/data/external/user/share/', 'new_share'),
+      sumDailyMetric('/data/external/user/profile/', 'profile_uv'),
+      sumDailyMetric('/data/external/user/play/', 'play_count'),
+    ])
+
+    return {
+      inc_click: incClick,
+      inc_coin: 0,
+      inc_dm: 0,
+      inc_elec: 0,
+      inc_fav: incFav,
+      inc_like: incLike,
+      inc_reply: incReply,
+      inc_share: incShare,
+    }
+  }
+
+  /**
+   * 获取作品按日维度的增量数据，用于绘制趋势图。
+   * 抖音的 `data/external/item/like|comment|share|play` 端点形状一致：
+   *   { result_list: [{ date: 'yyyy-MM-dd', metric: number }] }
+   */
+  async getArcDailyStat(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    dateType: 7 | 15 | 30 = 30,
+  ): Promise<DouyinItemDailyStat[]> {
+    const params = { item_id: itemId, date_type: dateType }
+    const [likeEnv, commentEnv, shareEnv, playEnv] = await Promise.all([
+      this.callDataApi<{ result_list: { date: string, like_count: number }[] }>('/data/external/item/like/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, comment_count: number }[] }>('/data/external/item/comment/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, share_count: number }[] }>('/data/external/item/share/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, play_count: number }[] }>('/data/external/item/play/', accessToken, openId, params),
+    ])
+
+    const merged = new Map<string, DouyinItemDailyStat>()
+    const ensure = (date: string) => {
+      let row = merged.get(date)
+      if (!row) {
+        row = { date, like_count: 0, comment_count: 0, share_count: 0, play_count: 0 }
+        merged.set(date, row)
+      }
+      return row
+    }
+    for (const p of likeEnv?.data?.result_list || []) {
+      ensure(p.date).like_count = p.like_count
+    }
+    for (const p of commentEnv?.data?.result_list || []) {
+      ensure(p.date).comment_count = p.comment_count
+    }
+    for (const p of shareEnv?.data?.result_list || []) {
+      ensure(p.date).share_count = p.share_count
+    }
+    for (const p of playEnv?.data?.result_list || []) {
+      ensure(p.date).play_count = p.play_count
+    }
+    return [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
   }
 
   async deleteArchive(accessToken: string, videoId: string) {

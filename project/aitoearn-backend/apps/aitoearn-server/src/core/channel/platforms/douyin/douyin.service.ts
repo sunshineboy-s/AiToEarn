@@ -452,13 +452,25 @@ export class DouyinService extends PlatformBaseService {
   }
 
   /**
+   * 解析账号的 open_id（账号 uid 字段直接存的就是抖音 open_id，
+   * 见 createAccountAndSetAccessToken 里 `uid: douyinUserInfo.open_id`）。
+   *
+   * 抖音数据 API 必须同时带 access_token 和 open_id，否则会报错。
+   */
+  private async getOpenId(accountId: string): Promise<string> {
+    const account = await this.accountRepository.getById(accountId)
+    return account?.uid || ''
+  }
+
+  /**
    * 获取用户数据
    * @param accountId 账户ID
    * @returns
    */
   async getUserStat(accountId: string) {
     const accessToken = await this.getAccountAccessToken(accountId)
-    return await this.douyinApiService.getUserStat(accessToken)
+    const openId = await this.getOpenId(accountId)
+    return await this.douyinApiService.getUserStat(accessToken, openId)
   }
 
   /**
@@ -469,7 +481,8 @@ export class DouyinService extends PlatformBaseService {
    */
   async getArcStat(accountId: string, resourceId: string) {
     const accessToken = await this.getAccountAccessToken(accountId)
-    return await this.douyinApiService.getArcStat(accessToken, resourceId)
+    const openId = await this.getOpenId(accountId)
+    return await this.douyinApiService.getArcStat(accessToken, resourceId, openId)
   }
 
   /**
@@ -479,7 +492,8 @@ export class DouyinService extends PlatformBaseService {
    */
   async getArcIncStat(accountId: string) {
     const accessToken = await this.getAccountAccessToken(accountId)
-    return await this.douyinApiService.getArcIncStat(accessToken)
+    const openId = await this.getOpenId(accountId)
+    return await this.douyinApiService.getArcIncStat(accessToken, openId)
   }
 
   /**
