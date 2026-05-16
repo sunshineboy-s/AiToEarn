@@ -97,4 +97,71 @@ export class DataCubeController {
     const dataCube = await this.getDataCube(accountId)
     return await dataCube.getArcDataBulk(accountId, dataId)
   }
+
+  // ── YouTube-specific deep analytics ────────────────────────────────
+  // 这些端点只对 YouTube 账号有效；其他平台调用会返回
+  // DataCubeAccountTypeNotSupported（路由层不强制白名单，方便未来扩展到
+  // 别的有等价 Analytics API 的平台）。
+
+  private async getYoutubeDataCube(accountId: string): Promise<YoutubeDataService> {
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account)
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    if (account.relayAccountRef) {
+      throw new RelayAccountException(account.relayAccountRef, accountId)
+    }
+    if (account.type !== AccountType.YOUTUBE) {
+      throw new AppException(ResponseCode.DataCubeAccountTypeNotSupported)
+    }
+    return this.youtubeDataService
+  }
+
+  @ApiDoc({
+    summary: 'YouTube Audience Demographics (age × gender)',
+  })
+  @Get('/youtube/audienceDemographics/:accountId')
+  async youtubeAudienceDemographics(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getYoutubeDataCube(accountId)
+    return await dataCube.getAudienceDemographics(accountId)
+  }
+
+  @ApiDoc({
+    summary: 'YouTube Traffic Sources (search / suggested / external / ...)',
+  })
+  @Get('/youtube/trafficSources/:accountId')
+  async youtubeTrafficSources(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getYoutubeDataCube(accountId)
+    return await dataCube.getTrafficSources(accountId)
+  }
+
+  @ApiDoc({
+    summary: 'YouTube Device Types (mobile / desktop / TV / tablet)',
+  })
+  @Get('/youtube/deviceTypes/:accountId')
+  async youtubeDeviceTypes(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+  ) {
+    const dataCube = await this.getYoutubeDataCube(accountId)
+    return await dataCube.getDeviceTypes(accountId)
+  }
+
+  @ApiDoc({
+    summary: 'YouTube Audience Retention curve (per video)',
+  })
+  @Get('/youtube/videoRetention/:accountId/:videoId')
+  async youtubeVideoRetention(
+    @GetToken() token: TokenInfo,
+    @Param('accountId') accountId: string,
+    @Param('videoId') videoId: string,
+  ) {
+    const dataCube = await this.getYoutubeDataCube(accountId)
+    return await dataCube.getVideoRetention(accountId, videoId)
+  }
 }
