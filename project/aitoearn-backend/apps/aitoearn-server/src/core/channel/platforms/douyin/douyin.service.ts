@@ -483,6 +483,66 @@ export class DouyinService extends PlatformBaseService {
   }
 
   /**
+   * 获取自己的视频列表
+   * 用于 EngagementProvider.fetchUserPosts
+   */
+  async getVideoList(accountId: string, cursor = 0, count = 20) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.resolveOpenId(accountId)
+    return await this.douyinApiService.getVideoList(accessToken, openId, cursor, count)
+  }
+
+  /**
+   * 获取作品评论
+   */
+  async getCommentList(accountId: string, itemId: string, cursor = 0, count = 20) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.resolveOpenId(accountId)
+    return await this.douyinApiService.getCommentList(accessToken, openId, itemId, cursor, count)
+  }
+
+  /**
+   * 获取评论的回复列表
+   */
+  async getCommentReplies(
+    accountId: string,
+    itemId: string,
+    commentId: string,
+    cursor = 0,
+    count = 20,
+  ) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.resolveOpenId(accountId)
+    return await this.douyinApiService.getCommentReplies(accessToken, openId, itemId, commentId, cursor, count)
+  }
+
+  /**
+   * 回复一条评论
+   */
+  async replyToComment(
+    accountId: string,
+    itemId: string,
+    commentId: string,
+    content: string,
+  ) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.resolveOpenId(accountId)
+    return await this.douyinApiService.replyToComment(accessToken, openId, itemId, commentId, content)
+  }
+
+  /**
+   * 从 Account 表里取出抖音 open_id
+   * （createAccount 时就把 douyinUserInfo.open_id 存到 account.uid 字段了）
+   */
+  private async resolveOpenId(accountId: string): Promise<string> {
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account || !account.uid) {
+      throw new AppException(ResponseCode.ChannelAccountNotFound, { accountId })
+    }
+    return account.uid
+  }
+
+  /**
    * 删除稿件
    * @param accountId
    * @param postId

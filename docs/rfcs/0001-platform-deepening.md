@@ -106,10 +106,12 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
    - 把已有 `XhsDataService` 加入 `data-cube.module.ts` 的 providers
    - `dataCubeMap.set(AccountType.Xhs, xhsDataService)` 让路由不再 404
    - 行为依然是返回 0（service 现状），但通过 logger 留信号；真接入见下一条
-3. 🔲 **抖音 API 真接入**：把 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 的占位实现替换为对应 [抖音开放平台数据 API](https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/account-data) 的真实调用
+3. ✅ **抖音 API 真接入**：`DouyinApiService.getUserStat / getArcStat / getArcIncStat` 已替换为对应 [抖音开放平台数据 API](https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/account-data) 的真实 HTTP 调用，并新增评论域 4 个端点：`getVideoList / getCommentList / getCommentReplies / replyToComment`
 4. 🔲 **小红书 API 真接入**：XHS 没有开放平台，需独立 RFC 评审 cookie 抓取或浏览器自动化方案
-5. 🔲 **engagement provider 补全 4 个平台**（XHS / 抖音 / B站 / TikTok）
-   - 优先实现"评论拉取 + 评论挖掘"，"AI 回复"复用现有 prompt 链路
+5. ⚠️ **engagement provider 补全 4 个平台**（XHS / 抖音 / B站 / TikTok）
+   - **抖音 ✅ 已接真实 API**（OAuth scope 加 `video.list,video.data,video.comment`，`DouyinEngagementProvider` 已闭环）
+   - 其余三家仍是骨架；XHS / B 站 等 BrowserAutomationModule 就绪，TikTok 等评论 scope 审批
+   - "AI 回复"复用现有 prompt 链路
 
 ### 6.2 P1 抽通用底座
 

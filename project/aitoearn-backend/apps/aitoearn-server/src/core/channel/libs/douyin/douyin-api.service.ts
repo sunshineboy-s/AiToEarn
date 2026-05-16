@@ -29,7 +29,14 @@ export class DouyinApiService {
    * @returns
    */
   getAuthPage(redirectURL: string, taskId: string) {
-    const url = `https://open.douyin.com/platform/oauth/connect?client_key=${this.appId}&response_type=code&scope=user_info&redirect_uri=${redirectURL}&state=${taskId}`
+    // scopes (must match what's enabled on the Douyin Open Platform app):
+    //   user_info     — read profile
+    //   video.list    — list user's own videos
+    //   video.data    — read per-video stats (views/likes/comments/shares)
+    //   video.comment — list comments on user's videos and reply to them
+    // 注意：增加 scope 后，已有授权用户需要重新授权才能拿到新权限。
+    const scopes = ['user_info', 'video.list', 'video.data', 'video.comment'].join(',')
+    const url = `https://open.douyin.com/platform/oauth/connect?client_key=${this.appId}&response_type=code&scope=${scopes}&redirect_uri=${redirectURL}&state=${taskId}`
     return {
       url,
       taskId,
@@ -650,6 +657,260 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
         inc_reply: 0,
         inc_share: 0,
       }
+    }
+  }
+
+  /**
+   * 获取用户作品列表（自己的视频）
+   * 抖音开放平台：GET /api/douyin/v1/video/video_list/
+   * 文档：https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/video-management/douyin/list/
+   *
+   * 需要 scope `video.list`。注意：cursor 是 unix 秒时间戳（首次传 0）。
+   *
+   * @param accessToken 用户级 access_token
+   * @param openId
+   * @param cursor 时间戳分页游标，0 表示从最新开始
+   * @param count  单页大小（最大 20）
+   */
+  async getVideoList(accessToken: string, openId: string, cursor = 0, count = 20) {
+    const startTime = Date.now()
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          cursor?: number
+          has_more?: boolean
+          list?: Array<{
+            item_id: string
+            title?: string
+            cover?: string
+            create_time?: number
+            share_url?: string
+            statistics?: {
+              comment_count?: number
+              digg_count?: number
+              download_count?: number
+              forward_count?: number
+              play_count?: number
+              share_count?: number
+            }
+          }>
+        }
+      }>('https://open.douyin.com/api/douyin/v1/video/video_list/', {
+        headers: { 'access-token': accessToken },
+        params: { open_id: openId, cursor, count },
+      })
+      const data = res.data.data
+      if (data.error_code !== 0) {
+        this.logger.warn({
+          path: 'douyin getVideoList error',
+          openId,
+          data,
+          latency: Date.now() - startTime,
+        })
+        return { list: [], cursor: 0, has_more: false }
+      }
+      return {
+        list: data.list ?? [],
+        cursor: data.cursor ?? 0,
+        has_more: data.has_more ?? false,
+      }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin getVideoList error',
+        openId,
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      return { list: [], cursor: 0, has_more: false }
+    }
+  }
+
+  /**
+   * 获取视频的评论列表（顶级评论）
+   * 抖音开放平台：GET /api/douyin/v1/video/item_comment_list/
+   * 文档：https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/account-permission/comment-management/comment-list
+   *
+   * 需要 scope `video.comment`。
+   * 此接口仅返回**自己作品下**的评论。
+   */
+  async getCommentList(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    cursor = 0,
+    count = 20,
+  ) {
+    const startTime = Date.now()
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          cursor?: number
+          has_more?: boolean
+          list?: Array<{
+            comment_id: string
+            comment_user_id: string
+            content: string
+            create_time: number
+            digg_count?: number
+            reply_comment_total?: number
+            top?: boolean
+            nickname?: string
+            avatar?: string
+          }>
+        }
+      }>('https://open.douyin.com/api/douyin/v1/video/item_comment_list/', {
+        headers: { 'access-token': accessToken },
+        params: { open_id: openId, item_id: itemId, cursor, count },
+      })
+
+      const data = res.data.data
+      if (data.error_code !== 0) {
+        this.logger.warn({
+          path: 'douyin getCommentList error',
+          openId,
+          itemId,
+          data,
+          latency: Date.now() - startTime,
+        })
+        return { list: [], cursor: 0, has_more: false }
+      }
+      return {
+        list: data.list ?? [],
+        cursor: data.cursor ?? 0,
+        has_more: data.has_more ?? false,
+      }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin getCommentList error',
+        openId,
+        itemId,
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      return { list: [], cursor: 0, has_more: false }
+    }
+  }
+
+  /**
+   * 获取一条评论下的回复列表
+   * 抖音开放平台：GET /api/douyin/v1/video/item_comment_reply_list/
+   */
+  async getCommentReplies(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    cursor = 0,
+    count = 20,
+  ) {
+    const startTime = Date.now()
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          cursor?: number
+          has_more?: boolean
+          list?: Array<{
+            comment_id: string
+            comment_user_id: string
+            content: string
+            create_time: number
+            digg_count?: number
+            nickname?: string
+            avatar?: string
+          }>
+        }
+      }>('https://open.douyin.com/api/douyin/v1/video/item_comment_reply_list/', {
+        headers: { 'access-token': accessToken },
+        params: { open_id: openId, item_id: itemId, comment_id: commentId, cursor, count },
+      })
+      const data = res.data.data
+      if (data.error_code !== 0) {
+        this.logger.warn({
+          path: 'douyin getCommentReplies error',
+          openId,
+          itemId,
+          commentId,
+          data,
+          latency: Date.now() - startTime,
+        })
+        return { list: [], cursor: 0, has_more: false }
+      }
+      return {
+        list: data.list ?? [],
+        cursor: data.cursor ?? 0,
+        has_more: data.has_more ?? false,
+      }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin getCommentReplies error',
+        openId,
+        itemId,
+        commentId,
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      return { list: [], cursor: 0, has_more: false }
+    }
+  }
+
+  /**
+   * 回复一条评论
+   * 抖音开放平台：POST /api/douyin/v1/video/item_comment_reply/
+   *
+   * 需要 scope `video.comment`。第三方应用**不允许**在他人作品下发顶级评论；
+   * 只能 reply 到 (a) 自己作品下的评论，或 (b) 他人作品中 @ 了自己的评论。
+   *
+   * @returns 创建的评论 id
+   */
+  async replyToComment(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    content: string,
+  ): Promise<{ comment_id: string }> {
+    const startTime = Date.now()
+    try {
+      const res = await axios.post<{
+        data: { error_code: number, description: string, comment_id?: string }
+      }>(
+        'https://open.douyin.com/api/douyin/v1/video/item_comment_reply/',
+        { open_id: openId, item_id: itemId, comment_id: commentId, content },
+        { headers: { 'access-token': accessToken, 'content-type': 'application/json' } },
+      )
+      const data = res.data.data
+      if (data.error_code !== 0 || !data.comment_id) {
+        this.logger.warn({
+          path: 'douyin replyToComment error',
+          openId,
+          itemId,
+          commentId,
+          data,
+          latency: Date.now() - startTime,
+        })
+        throw new Error(data.description || 'replyToComment failed')
+      }
+      return { comment_id: data.comment_id }
+    }
+    catch (error) {
+      this.logger.error({
+        path: 'douyin replyToComment error',
+        openId,
+        itemId,
+        commentId,
+        data: error,
+        latency: Date.now() - startTime,
+      })
+      throw error
     }
   }
 
