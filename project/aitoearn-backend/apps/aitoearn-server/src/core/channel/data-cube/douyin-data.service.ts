@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { AccountType } from '@yikart/common'
 import { AccountRepository } from '@yikart/mongodb'
@@ -8,15 +8,16 @@ import { DataCubeBase } from './data.base'
 /**
  * 抖音 - 统计数据
  *
- * NOTE: 数据来源是抖音开放平台的 user/item 数据 API。
- * 目前 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 是占位实现
- * （返回 0），上层 data-cube 已经按真实形状 (`follower / arc_passed_total / view ...`)
- * 接好。后续在 `DouyinApiService` 里把 HTTP 调用补完，本服务无需任何改动即可
- * 自动返回真实数据。
+ * 数据来源：抖音开放平台数据 API（`/data/external/user/*` 与 `/data/external/item/*`）。
+ * 5 个方法目前都走真实 API：
+ * - getAccountDataCube / getArcDataCube：当前累计指标
+ * - getAccountDataBulk / getArcDataBulk：最近 30 天每日增量
+ *
+ * 上游任何端点失败均走 fail-soft（DouyinApiService 内部处理），返回空列表
+ * 而不是 throw，让前端的 chart 不会因为部分指标抓不到就整张 panic。
  */
 @Injectable()
 export class DouyinDataService extends DataCubeBase {
-  private readonly logger = new Logger(DouyinDataService.name)
   constructor(
     readonly douyinService: DouyinService,
     private readonly accountRepository: AccountRepository,
@@ -42,9 +43,19 @@ export class DouyinDataService extends DataCubeBase {
   }
 
   async getAccountDataBulk(accountId: string) {
-    this.logger.log('getAccountDataBulk', accountId)
+    const series = await this.douyinService.getAccountDailyStat(accountId, 30)
     return {
-      list: [],
+      list: series.map(p => ({
+        // 把 `date` 一并塞回 list 里，方便上层画时间轴。
+        // ChannelAccountDataCube 没有 `date` 字段，但是 list 元素是 any-extensible
+        // 因为接口没有 sealed；不强制写到契约里以避免影响其他平台。
+        ...p,
+        fensNum: p.fensNum,
+        likeNum: p.likeNum,
+        commentNum: p.commentNum,
+        shareNum: p.shareNum,
+        playNum: p.playNum,
+      })),
     }
   }
 
@@ -60,11 +71,17 @@ export class DouyinDataService extends DataCubeBase {
   }
 
   async getArcDataBulk(accountId: string, dataId: string) {
-    this.logger.log('getArcDataBulk', accountId, dataId)
+    const series = await this.douyinService.getArcDailyStat(accountId, dataId, 30)
     return {
       recordId: '',
-      dataId: '',
-      list: [],
+      dataId,
+      list: series.map(p => ({
+        ...p,
+        playNum: p.play_count,
+        likeNum: p.like_count,
+        commentNum: p.comment_count,
+        shareNum: p.share_count,
+      })),
     }
   }
 }

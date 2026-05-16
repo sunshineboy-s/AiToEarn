@@ -497,6 +497,29 @@ export class DouyinService extends PlatformBaseService {
   }
 
   /**
+   * 获取账号按日增量序列（最近 N 天的粉丝/点赞/评论/分享/播放每日点）
+   * @param accountId 账户 ID
+   * @param dateType 7 / 15 / 30
+   */
+  async getAccountDailyStat(accountId: string, dateType: 7 | 15 | 30 = 30) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.getOpenId(accountId)
+    return await this.douyinApiService.getAccountDailyStat(accessToken, openId, dateType)
+  }
+
+  /**
+   * 获取单条作品按日增量序列（最近 N 天）
+   * @param accountId 账户 ID
+   * @param itemId 抖音 item_id
+   * @param dateType 7 / 15 / 30
+   */
+  async getArcDailyStat(accountId: string, itemId: string, dateType: 7 | 15 | 30 = 30) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const openId = await this.getOpenId(accountId)
+    return await this.douyinApiService.getArcDailyStat(accessToken, openId, itemId, dateType)
+  }
+
+  /**
    * 删除稿件
    * @param accountId
    * @param postId

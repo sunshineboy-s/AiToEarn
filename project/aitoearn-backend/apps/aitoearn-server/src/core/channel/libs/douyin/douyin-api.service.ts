@@ -669,6 +669,78 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
   }
 
   /**
+   * 获取账号按日维度的增量数据，用于绘制趋势图。
+   *
+   * 抖音的 `data/external/user/{fans|like|comment|share|play|profile}` 端点形状一致：
+   *   { result_list: [{ date: 'yyyy-MM-dd', <metric>: number, ... }] }
+   *
+   * - fans: total_fans / new_fans (用 total_fans 做粉丝数序列)
+   * - like / comment / share / play: 直接对应名称
+   * - profile: profile_uv 作为"主页访问"，目前没有跨平台契约字段，暂不输出
+   *
+   * 任何端点失败 → 走 fail-soft，此项缺失填 0；不让一个指标失败拖垮整个 trend。
+   */
+  async getAccountDailyStat(
+    accessToken: string,
+    openId: string,
+    dateType: 7 | 15 | 30 = 30,
+  ): Promise<Array<{
+    date: string
+    fensNum: number
+    likeNum: number
+    commentNum: number
+    shareNum: number
+    playNum: number
+  }>> {
+    if (!openId) {
+      this.logger.warn('douyin getAccountDailyStat: empty openId, returning empty list')
+      return []
+    }
+    const params = { date_type: dateType }
+    const [fansEnv, likeEnv, commentEnv, shareEnv, playEnv] = await Promise.all([
+      this.callDataApi<{ result_list: DouyinFansDataPoint[] }>('/data/external/user/fans/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, new_like: number }[] }>('/data/external/user/like/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, new_comment: number }[] }>('/data/external/user/comment/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, new_share: number }[] }>('/data/external/user/share/', accessToken, openId, params),
+      this.callDataApi<{ result_list: { date: string, play_count: number }[] }>('/data/external/user/play/', accessToken, openId, params),
+    ])
+
+    interface Row {
+      date: string
+      fensNum: number
+      likeNum: number
+      commentNum: number
+      shareNum: number
+      playNum: number
+    }
+    const merged = new Map<string, Row>()
+    const ensure = (date: string): Row => {
+      let row = merged.get(date)
+      if (!row) {
+        row = { date, fensNum: 0, likeNum: 0, commentNum: 0, shareNum: 0, playNum: 0 }
+        merged.set(date, row)
+      }
+      return row
+    }
+    for (const p of fansEnv?.data?.result_list || []) {
+      ensure(p.date).fensNum = p.total_fans ?? 0
+    }
+    for (const p of likeEnv?.data?.result_list || []) {
+      ensure(p.date).likeNum = p.new_like ?? 0
+    }
+    for (const p of commentEnv?.data?.result_list || []) {
+      ensure(p.date).commentNum = p.new_comment ?? 0
+    }
+    for (const p of shareEnv?.data?.result_list || []) {
+      ensure(p.date).shareNum = p.new_share ?? 0
+    }
+    for (const p of playEnv?.data?.result_list || []) {
+      ensure(p.date).playNum = p.play_count ?? 0
+    }
+    return [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  /**
    * 获取作品按日维度的增量数据，用于绘制趋势图。
    * 抖音的 `data/external/item/like|comment|share|play` 端点形状一致：
    *   { result_list: [{ date: 'yyyy-MM-dd', metric: number }] }
