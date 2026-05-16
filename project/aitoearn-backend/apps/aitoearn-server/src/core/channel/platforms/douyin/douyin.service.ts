@@ -458,7 +458,10 @@ export class DouyinService extends PlatformBaseService {
    */
   async getUserStat(accountId: string) {
     const accessToken = await this.getAccountAccessToken(accountId)
-    return await this.douyinApiService.getUserStat(accessToken)
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account)
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    return await this.douyinApiService.getUserStat(accessToken, account.uid)
   }
 
   /**
@@ -469,17 +472,32 @@ export class DouyinService extends PlatformBaseService {
    */
   async getArcStat(accountId: string, resourceId: string) {
     const accessToken = await this.getAccountAccessToken(accountId)
-    return await this.douyinApiService.getArcStat(accessToken, resourceId)
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account)
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    return await this.douyinApiService.getArcStat(
+      accessToken,
+      account.uid,
+      resourceId,
+    )
   }
 
   /**
    * 获取稿件增量数据数据
    * @param accountId 账户ID
+   * @param resourceId 稿件ID
    * @returns
    */
-  async getArcIncStat(accountId: string) {
+  async getArcIncStat(accountId: string, resourceId: string) {
     const accessToken = await this.getAccountAccessToken(accountId)
-    return await this.douyinApiService.getArcIncStat(accessToken)
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account)
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    return await this.douyinApiService.getArcIncStat(
+      accessToken,
+      account.uid,
+      resourceId,
+    )
   }
 
   /**
