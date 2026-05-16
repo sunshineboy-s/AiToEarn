@@ -6,7 +6,7 @@ import { AppException, getErrorMessage, ResponseCode } from '@yikart/common'
 import { RedisService } from '@yikart/redis'
 import axios, { isAxiosError } from 'axios'
 import { GaxiosError, GaxiosResponse } from 'gaxios'
-import { Auth, google, youtube_v3 } from 'googleapis'
+import { Auth, google, youtube_v3, youtubeAnalytics_v2 } from 'googleapis'
 import { v4 as uuidv4 } from 'uuid'
 import { getCurrentTimestamp } from '../../../../common/utils/time.util'
 import { config } from '../../../../config'
@@ -59,6 +59,67 @@ export class YoutubeService extends PlatformBaseService {
   initializeYouTubeClient(accessToken: string) {
     this.oauth2Client.setCredentials({ access_token: accessToken })
     this.youtubeClient = google.youtube({ version: 'v3', auth: this.oauth2Client })
+  }
+
+  /**
+   * 取得 YouTube Analytics v2 客户端
+   * 注意：调用前必须保证 oauth2Client 已设置过 access_token (一般通过 ensureValidAccessToken)
+   */
+  private getAnalyticsClient(): youtubeAnalytics_v2.Youtubeanalytics {
+    return google.youtubeAnalytics({ version: 'v2', auth: this.oauth2Client })
+  }
+
+  /**
+   * 调用 YouTube Analytics API 的 reports.query
+   * 详见 https://developers.google.com/youtube/analytics/reference/reports/query
+   *
+   * 注意：
+   * - 仅当账号的 OAuth scope 包含 `yt-analytics.readonly` 时可用（已在 OAUTH_SCOPES 中声明）
+   * - 调用方需自行传 ids（一般是 `channel==MINE` 或 `channel==<channelId>`）
+   * - filters 字段需要 URL 安全的格式，例如 `country==US;ageGroup==age25-34`
+   */
+  async getAnalyticsReport(
+    accountId: string,
+    params: {
+      ids: string
+      startDate: string
+      endDate: string
+      metrics: string
+      dimensions?: string
+      filters?: string
+      sort?: string
+      maxResults?: number
+      currency?: string
+    },
+  ): Promise<youtubeAnalytics_v2.Schema$QueryResponse | AppException | unknown> {
+    if (!(await this.ensureValidAccessToken(accountId))) {
+      this.logger.warn(`getAnalyticsReport: invalid access token for accountId=${accountId}`)
+      return new AppException(ResponseCode.ChannelAccessTokenFailed)
+    }
+    try {
+      const analytics = this.getAnalyticsClient()
+      const response = await analytics.reports.query({
+        ids: params.ids,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        metrics: params.metrics,
+        dimensions: params.dimensions,
+        filters: params.filters,
+        sort: params.sort,
+        maxResults: params.maxResults,
+        currency: params.currency,
+      })
+      return response.data
+    }
+    catch (err) {
+      this.logger.error({
+        path: 'youtube getAnalyticsReport error',
+        accountId,
+        params,
+        err: getErrorMessage(err),
+      })
+      return err
+    }
   }
 
   /**

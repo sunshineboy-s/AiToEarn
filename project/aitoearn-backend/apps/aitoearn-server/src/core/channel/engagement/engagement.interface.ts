@@ -30,6 +30,15 @@ export interface EngagementComment {
   }
   createdAt: string
   hasReplies?: boolean
+  /**
+   * Platform-specific extras that callers shouldn't try to interpret.
+   *
+   * Some platforms need more than just `commentId` to perform a reply
+   * (e.g. Douyin requires `(item_id, comment_id)`, Bilibili requires
+   * `(oid, type, root)`). Provider implementations stash whatever they
+   * need here, and `replyToComment` reads it back. Treat as opaque.
+   */
+  extra?: Record<string, string>
 }
 
 /**
@@ -53,7 +62,18 @@ export interface PublishCommentResponse {
 
 /**
  * Interface for engagement service implementations
+ *
  * @template T The type of comment data returned by the platform
+ *
+ * Notes on `commentId`:
+ * - All identifier strings (postId / commentId) are treated as **opaque**
+ *   by the EngagementService and the controller layer.
+ * - For platforms whose APIs need additional context to act on a
+ *   comment, providers may either (a) encode that context into the id
+ *   itself (Douyin's `${itemId}:${commentId}`), or (b) preserve it on
+ *   `EngagementComment.extra` and require the caller to round-trip the
+ *   whole `EngagementComment` back. Both patterns are supported; pick
+ *   the simpler one for each platform and document it in the provider.
  */
 export interface EngagementProvider {
   /**
