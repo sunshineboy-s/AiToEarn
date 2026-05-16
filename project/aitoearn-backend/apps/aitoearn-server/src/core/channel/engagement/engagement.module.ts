@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common'
 import { ChannelSharedModule } from '../platforms/channel-shared.module'
+import { DouyinModule } from '../platforms/douyin/douyin.module'
 import { MetaModule } from '../platforms/meta/meta.module'
 import { YoutubeModule } from '../platforms/youtube/youtube.module'
 import { EngagementController } from './engagement.controller'
 import { EngagementRecordService } from './engagement.record.service'
 import { EngagementService } from './engagement.service'
+import { DouyinEngagementProvider } from './providers/douyin.provider'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
@@ -15,11 +17,13 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
 @Module({
   imports: [
     ChannelSharedModule,
+    DouyinModule,
     MetaModule,
     YoutubeModule,
   ],
   controllers: [EngagementController],
   providers: [
+    DouyinEngagementProvider,
     FacebookEngagementProvider,
     InstagramEngagementProvider,
     ThreadsEngagementProvider,
@@ -30,6 +34,7 @@ import { EngagementReplyToCommentConsumer } from './workers/reply-to-comment.con
     EngagementReplyToCommentConsumer,
   ],
   exports: [
+    DouyinEngagementProvider,
     FacebookEngagementProvider,
     InstagramEngagementProvider,
     ThreadsEngagementProvider,

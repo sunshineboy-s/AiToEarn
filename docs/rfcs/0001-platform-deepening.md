@@ -108,8 +108,19 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
    - 行为依然是返回 0（service 现状），但通过 logger 留信号；真接入见下一条
 3. 🔲 **抖音 API 真接入**：把 `DouyinApiService.getUserStat / getArcStat / getArcIncStat` 的占位实现替换为对应 [抖音开放平台数据 API](https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/account-data) 的真实调用
 4. 🔲 **小红书 API 真接入**：XHS 没有开放平台，需独立 RFC 评审 cookie 抓取或浏览器自动化方案
-5. 🔲 **engagement provider 补全 4 个平台**（XHS / 抖音 / B站 / TikTok）
-   - 优先实现"评论拉取 + 评论挖掘"，"AI 回复"复用现有 prompt 链路
+5. 🔲 **engagement provider 补全（依赖各平台开放 API 实际能力）**
+
+   合入 PR #19 之后调研发现，"engagement provider 补 4 个平台"这个原计划是**做不到**的——不是工程问题，是平台 API 决策问题。重新分类如下：
+
+   | 平台 | comment list | reply | top-level comment | 可做？ |
+   |---|---|---|---|---|
+   | **抖音** | ✅ `/api/douyin/v1/comment/list/` | ✅ `/comment/reply/` | ❌ Open API 禁止第三方代发顶级评论 | **能做：list + reply** ✅ |
+   | TikTok | ❌ Display API 无 comment 端点 | ❌ | ❌ | 需要 Research API（学术资质）→ 不做 |
+   | B站 | ❌ Open API 无 | ❌ | ❌ | 只有 web 私有 API，封号风险 → 不做 |
+   | XHS | ❌ 无开放平台 | ❌ | ❌ | 同 §6.1 #4 等浏览器自动化方案 → 后续 RFC |
+
+   - ✅ **抖音 engagement provider 已实现**（PR #20）：`fetchPostComments / fetchCommentReplies / replyToComment / commentOnPost(返回 not-supported)`。同时把 `commentId` 编码为 `${itemId}:${commentId}` 复合键（Douyin reply API 需要 `item_id + comment_id`，但 `EngagementProvider` 接口只透传 `commentId`）。
+   - 🔲 B站 / TikTok / XHS engagement：**不在 P0 范围**，等开放平台开放对应能力或浏览器自动化方案落地（见 P1 #6 BrowserAutomationModule）。
 
 ### 6.2 P1 抽通用底座
 
@@ -147,9 +158,10 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 
 ## 8. 验收标准（P0）
 
-- [ ] `GET /channel/dataCube/accountDataCube/{accountId}` 在抖音/TikTok 账号上返回非零字段（如账号确实有数据）
-- [ ] `GET /channel/dataCube/accountDataCube/{accountId}` 在 XHS 账号上不再 404，返回 0 但有 logger 警告
-- [ ] `pnpm nx build aitoearn-server` 通过
+- [x] PR #10：`GET /channel/dataCube/accountDataCube/{accountId}` 在抖音 / TikTok / XHS 账号上不再 404
+- [x] PR #19：抖音 data-cube 在该账号确实有数据时返回非零字段
+- [x] PR #20：抖音 engagement provider 接入；可拉评论列表 / 拉评论回复 / 回复评论
+- [ ] `pnpm nx build aitoearn-server` 通过（每个 PR 必须满足）
 - [ ] `pnpm nx lint aitoearn-server` 不引入新 error
 - [ ] 不破坏现有 bilibili / youtube / instagram / threads / facebook 的行为
 

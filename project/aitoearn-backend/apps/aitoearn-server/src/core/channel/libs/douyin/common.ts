@@ -178,6 +178,51 @@ export interface DouyinItemShareResp {
   }>
 }
 
+// ============================================================
+// 互动开放服务 (Interaction API)
+// 文档：https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/account-permission/comment
+//
+// 抖音开放平台对评论 API 有重要限制：
+//   - 第三方应用 **不允许** 主动在他人作品下发表"顶级评论"。
+//   - 允许的操作是 "回复" —— 即对自己作品下、或对方@提到自己的评论进行 reply。
+//   - 因此 EngagementProvider.commentOnPost 在抖音上不会代发顶级评论；
+//     上层调用会落到只读路径，只暴露 "fetch comments" 与 "reply".
+// ============================================================
+
+export interface DouyinCommentItem {
+  comment_id: string
+  comment_user_id: string
+  content: string
+  create_time: number
+  digg_count: number
+  reply_comment_total?: number
+  /** 仅当评论者授权了昵称读取时返回 */
+  nickname?: string
+  /** 仅当评论者授权了头像读取时返回 */
+  avatar?: string
+}
+
+/** /api/douyin/v1/comment/list/ - 作品评论列表 */
+export interface DouyinCommentListResp {
+  cursor: number
+  has_more: boolean
+  list: DouyinCommentItem[]
+}
+
+/** /api/douyin/v1/comment/list_replies/ - 评论回复列表 */
+export interface DouyinCommentRepliesResp {
+  cursor: number
+  has_more: boolean
+  list: DouyinCommentItem[]
+}
+
+/** /api/douyin/v1/comment/reply/ - 回复评论的应答 */
+export interface DouyinCommentReplyResp {
+  comment_id: string
+  /** 部分版本会回带审核状态 */
+  audit_status?: 'audit_pending' | 'audit_pass' | 'audit_fail'
+}
+
 /**
  * 获取中文文件的URL
  * @param url

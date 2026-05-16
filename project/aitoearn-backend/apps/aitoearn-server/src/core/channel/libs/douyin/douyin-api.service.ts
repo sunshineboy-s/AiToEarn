@@ -5,6 +5,9 @@ import { config } from '../../../../config'
 import {
   DouyinAccessTokenInfo,
   DouyinClientTokenInfo,
+  DouyinCommentListResp,
+  DouyinCommentRepliesResp,
+  DouyinCommentReplyResp,
   DouyinDataEnvelope,
   DouyinItemBaseResp,
   DouyinItemCommentResp,
@@ -706,5 +709,145 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
         resource_id: videoId,
       },
     }
+  }
+
+  // ============================================================
+  // 互动开放服务 (Interaction API)
+  // 端点：
+  //   GET  /api/douyin/v1/comment/list/         - 作品评论列表
+  //   GET  /api/douyin/v1/comment/list_replies/ - 评论的回复列表
+  //   POST /api/douyin/v1/comment/reply/        - 回复评论
+  //
+  // 顶级评论（commentOnPost）抖音开放平台 **不允许** 第三方代发，
+  // 因此本服务只提供 reply 能力。
+  // ============================================================
+
+  /** 抖音 POST 类 API 的通用请求（仅互动相关 path 用） */
+  private async interactionApiPost<T>(
+    accessToken: string,
+    path: string,
+    body: Record<string, string | number>,
+  ): Promise<T> {
+    const start = Date.now()
+    try {
+      const res = await axios.post<DouyinDataEnvelope<T>>(
+        `https://open.douyin.com${path}`,
+        body,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'access-token': accessToken,
+          },
+        },
+      )
+      const errCode = res.data.data?.error_code ?? res.data.extra?.error_code
+      if (errCode !== 0) {
+        const desc
+          = res.data.data?.description
+            || res.data.extra?.description
+            || `douyin interaction api error_code=${errCode}`
+        this.logger.error({
+          path,
+          body: { open_id: body['open_id'], item_id: body['item_id'] },
+          latencyMs: Date.now() - start,
+          errorCode: errCode,
+          description: desc,
+        })
+        throw new Error(desc)
+      }
+      this.logger.log({
+        path,
+        body: { open_id: body['open_id'] },
+        latencyMs: Date.now() - start,
+      })
+      return res.data.data
+    }
+    catch (error) {
+      if ((error as Error).message?.startsWith('douyin interaction api'))
+        throw error
+      this.logger.error({
+        path,
+        body: { open_id: body['open_id'] },
+        latencyMs: Date.now() - start,
+        error: String(error),
+      })
+      throw new Error(String(error))
+    }
+  }
+
+  /**
+   * 获取作品评论列表
+   * GET /api/douyin/v1/comment/list/
+   */
+  async getCommentList(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    cursor = 0,
+    count = 20,
+    sortType: 0 | 1 = 0, // 0: 默认/热度, 1: 时间倒序
+  ): Promise<DouyinCommentListResp> {
+    return this.dataApiGet<DouyinCommentListResp>(
+      accessToken,
+      '/api/douyin/v1/comment/list/',
+      {
+        open_id: openId,
+        item_id: itemId,
+        cursor,
+        count,
+        sort_type: sortType,
+      },
+    )
+  }
+
+  /**
+   * 获取一条评论下面的回复
+   * GET /api/douyin/v1/comment/list_replies/
+   */
+  async getCommentReplies(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    cursor = 0,
+    count = 20,
+  ): Promise<DouyinCommentRepliesResp> {
+    return this.dataApiGet<DouyinCommentRepliesResp>(
+      accessToken,
+      '/api/douyin/v1/comment/list_replies/',
+      {
+        open_id: openId,
+        item_id: itemId,
+        comment_id: commentId,
+        cursor,
+        count,
+      },
+    )
+  }
+
+  /**
+   * 回复一条评论
+   * POST /api/douyin/v1/comment/reply/
+   *
+   * NOTE 抖音开放平台不允许第三方应用主动发起"顶级评论"，
+   *      此方法只能在已有评论的上下文里 reply。
+   */
+  async replyToComment(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    content: string,
+  ): Promise<DouyinCommentReplyResp> {
+    return this.interactionApiPost<DouyinCommentReplyResp>(
+      accessToken,
+      '/api/douyin/v1/comment/reply/',
+      {
+        open_id: openId,
+        item_id: itemId,
+        comment_id: commentId,
+        content,
+      },
+    )
   }
 }

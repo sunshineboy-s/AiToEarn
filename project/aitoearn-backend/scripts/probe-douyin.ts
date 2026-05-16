@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * 抖音开放平台数据 API 探测脚本
  *
@@ -115,6 +116,61 @@ async function main() {
       start_date: fmtDate(weekAgo),
       end_date: fmtDate(today),
     })
+  }
+
+  // 5. 互动 API - 评论列表
+  const commentListResp = await get('/api/douyin/v1/comment/list/', {
+    open_id: openId!,
+    item_id: itemId,
+    cursor: 0,
+    count: 5,
+    sort_type: 0,
+  })
+
+  // 6. 互动 API - 评论回复列表（如有评论）
+  const firstCommentId
+    = commentListResp?.data?.list?.[0]?.comment_id as string | undefined
+  if (firstCommentId) {
+    await get('/api/douyin/v1/comment/list_replies/', {
+      open_id: openId!,
+      item_id: itemId,
+      comment_id: firstCommentId,
+      cursor: 0,
+      count: 5,
+    })
+    console.log('\n[skip] /api/douyin/v1/comment/reply/ — set DOUYIN_PROBE_REPLY=1 to actually post a reply')
+    if (process.env.DOUYIN_PROBE_REPLY === '1') {
+      const start = Date.now()
+      try {
+        const res = await axios.post(
+          `${BASE}/api/douyin/v1/comment/reply/`,
+          {
+            open_id: openId,
+            item_id: itemId,
+            comment_id: firstCommentId,
+            content: '[probe] hi 👋',
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'access-token': accessToken,
+            },
+          },
+        )
+        console.log(`\n=== /api/douyin/v1/comment/reply/ ===`)
+        console.log(`  latency: ${Date.now() - start}ms`)
+        console.log(JSON.stringify(res.data, null, 2))
+      }
+      catch (e: any) {
+        console.log(`\n=== /api/douyin/v1/comment/reply/ (FAILED) ===`)
+        console.log(`  error: ${e?.message ?? e}`)
+        if (e?.response?.data)
+          console.log(`  body:  ${JSON.stringify(e.response.data, null, 2)}`)
+      }
+    }
+  }
+  else {
+    console.log('\n[skip] no comments on this item; skipping list_replies + reply probes')
   }
 
   console.log('\n================================================')
