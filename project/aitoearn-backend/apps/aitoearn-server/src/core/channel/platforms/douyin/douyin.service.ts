@@ -483,6 +483,74 @@ export class DouyinService extends PlatformBaseService {
   }
 
   /**
+   * 获取视频评论列表
+   * @param accountId
+   * @param itemId 视频 item_id
+   * @param cursor 分页游标，第一页传 0
+   * @param count 每页数量，最大 50
+   */
+  async getCommentList(accountId: string, itemId: string, cursor: number, count: number) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account) {
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    }
+    return this.douyinApiService.getCommentList(accessToken, account.uid, itemId, cursor, count)
+  }
+
+  /**
+   * 获取评论的回复列表
+   * @param accountId
+   * @param itemId
+   * @param commentId 父评论 ID
+   * @param cursor
+   * @param count
+   */
+  async getCommentReplyList(
+    accountId: string,
+    itemId: string,
+    commentId: string,
+    cursor: number,
+    count: number,
+  ) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account) {
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    }
+    return this.douyinApiService.getCommentReplyList(
+      accessToken,
+      account.uid,
+      itemId,
+      commentId,
+      cursor,
+      count,
+    )
+  }
+
+  /**
+   * 回复评论
+   * @param accountId
+   * @param itemId
+   * @param commentId 父评论 ID
+   * @param content 回复内容
+   */
+  async replyComment(accountId: string, itemId: string, commentId: string, content: string) {
+    const accessToken = await this.getAccountAccessToken(accountId)
+    const account = await this.channelAccountService.getAccountInfo(accountId)
+    if (!account) {
+      throw new AppException(ResponseCode.ChannelAccountNotFound)
+    }
+    return this.douyinApiService.replyComment(
+      accessToken,
+      account.uid,
+      itemId,
+      commentId,
+      content,
+    )
+  }
+
+  /**
    * 删除稿件
    * @param accountId
    * @param postId
