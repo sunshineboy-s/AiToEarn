@@ -17,9 +17,9 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 
 | 平台 | OAuth | Publish | data-cube | engagement | 工作链路完整度 |
 |---|---|---|---|---|---|
-| Bilibili | ✅ | ✅ | ✅ 真接入 (`getUserStat / getArcStat`) | ❌ 无 provider | 7/10 |
-| Douyin | ✅ | ✅ | ⚠️ 已挂上 controller，但 `DouyinApiService.getUserStat` 仍是占位 | ❌ | 6/10 |
-| Xiaohongshu | ⚠️ stub | ✅ | ⚠️ 已挂上 controller，但 service 五个方法仍是 stub | ❌ | 4/10 |
+| Bilibili | ✅ | ✅ | ✅ 真接入 (`getUserStat / getArcStat`) | ⚠️ provider 已有，仅 fetchUserPosts/getMetaPostDetail 真接入；评论需 cookie 层（见 §6.4） | 7/10 |
+| Douyin | ✅ | ✅ | ✅ 真接入（PR #24） | ⚠️ provider scaffold（PR #24），评论 API 待接入 | 7/10 |
+| Xiaohongshu | ⚠️ stub | ✅ | ⚠️ 已挂上 controller，但 service 五个方法仍是 stub | ⚠️ provider scaffold（PR #24），需 BrowserAutomationModule | 4/10 |
 | Kwai (快手) | ✅ | ✅ | ❌ data-cube service 不存在 | ❌ | 5/10 |
 | WeChat 公众号 | ✅ | ✅ | ✅ | ❌ | 7/10 |
 | WeChat Channels (视频号) | ✅ | ✅ | ❌ | ❌ | 5/10 |
@@ -129,7 +129,34 @@ AiToEarn 列出 14+ 个内容渠道，但 **data-cube（数据分析）和 engag
 9. **B 站 用户增量数据 (按日)**
    - 当前 `getAccountDataBulk` 返回 `[]`，B 站官方有 `data-online` 端点
 
-### 6.4 P3 待决策
+### 6.4 P1 待评审：B 站评论的 cookie 同步层
+
+> 这一条值得单独说，因为它是当前进度卡住的真正根因。
+
+**事实**：B 站开放平台（arcopen）**不开放**评论相关 API：
+- `getArchiveList / getUserStat / getArcStat` 等稿件类 API ✅ 全部能跑
+- 评论列表 / 回复评论 ❌ 没有官方端点
+
+**唯一可行方案**：老 web API `api.bilibili.com/x/v2/reply`，需要：
+- 浏览器 cookie（`SESSDATA / bili_jct / DedeUserID`）
+- WBI 签名（`w_rid + wts`）
+- CSRF token（`bili_jct`）
+
+这跟 arcopen 的 OAuth Bearer **完全是两套独立认证**，不能复用现有 `generateHeader`。
+
+**因此本 RFC 提议**：建立 `BilibiliCookieSyncModule`，承担：
+1. 从 Electron 端登录态同步 cookie 到后端 redis（用户授权下）
+2. 实现 WBI 签名逻辑（`bilibili-API-collect` 上文档清晰）
+3. 在 `BilibiliEngagementProvider.fetchPostComments / replyToComment` 里走这条通道
+
+**风险**：
+- B 站官方 ToS 不鼓励第三方 cookie 操作；账号封禁概率存在
+- WBI 签名算法 B 站每隔几个月改一次，需要主动维护
+- 国际版用户没有 B 站账号，这条线只对中国版用户生效
+
+工作量预计：1.5–2 周（含 cookie 同步 + WBI 实现 + 反爬维护策略）。
+
+### 6.5 P3 待决策
 
 10. **快手 / 视频号 / LinkedIn data-cube** — 需评审 API 可用性
 11. **TikTok 增量数据** — 需评估 Research API 申请成本
