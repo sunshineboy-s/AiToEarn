@@ -10,9 +10,13 @@ import { ReplyToCommentAnswer } from './ai.dto'
 import { AIGenCommentDto, FetchCommentRepliesRequest, FetchMetaPostsRequest, FetchPostCommentsRequest, FetchPostsRequest, LikePostRequest, PublishCommentReplyRequest, PublishCommentRequest, ReplyToCommentsDto } from './engagement.dto'
 import { EngagementProvider, PublishCommentResponse } from './engagement.interface'
 import { EngagementRecordService } from './engagement.record.service'
+import { BilibiliEngagementProvider } from './providers/bilibili.provider'
+import { DouyinEngagementProvider } from './providers/douyin.provider'
 import { FacebookEngagementProvider } from './providers/facebook.provider'
 import { InstagramEngagementProvider } from './providers/instagram.provider'
 import { ThreadsEngagementProvider } from './providers/threads.provider'
+import { TiktokEngagementProvider } from './providers/tiktok.provider'
+import { XiaohongshuEngagementProvider } from './providers/xiaohongshu.provider'
 import { YoutubeEngagementProvider } from './providers/youtube.provider'
 
 @Injectable()
@@ -23,6 +27,10 @@ export class EngagementService {
     instagramProvider: InstagramEngagementProvider,
     threadsProvider: ThreadsEngagementProvider,
     youtubeProvider: YoutubeEngagementProvider,
+    bilibiliProvider: BilibiliEngagementProvider,
+    douyinProvider: DouyinEngagementProvider,
+    tiktokProvider: TiktokEngagementProvider,
+    xiaohongshuProvider: XiaohongshuEngagementProvider,
     private readonly aiService: AiService,
     private readonly engagementRecordService: EngagementRecordService,
     private readonly queueService: QueueService,
@@ -33,6 +41,10 @@ export class EngagementService {
     this.providerMap.set('instagram', instagramProvider)
     this.providerMap.set('threads', threadsProvider)
     this.providerMap.set('youtube', youtubeProvider)
+    this.providerMap.set('bilibili', bilibiliProvider)
+    this.providerMap.set('douyin', douyinProvider)
+    this.providerMap.set('tiktok', tiktokProvider)
+    this.providerMap.set('xiaohongshu', xiaohongshuProvider)
   }
 
   private async checkRelayAccount(accountId: string) {
