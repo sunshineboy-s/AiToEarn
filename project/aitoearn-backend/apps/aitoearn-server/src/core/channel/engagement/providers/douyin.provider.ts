@@ -8,14 +8,19 @@ import { EngagementComment, EngagementProvider, FetchPostCommentsResponse, Publi
  * 抖音 Engagement Provider
  *
  * 抖音开放平台支持的互动能力：
- * - /item/comment/list/ — 获取视频评论列表
- * - /item/comment/reply/list/ — 获取评论的回复列表
- * - /item/comment/reply/ — 回复评论
+ * - GET  /api/douyin/v1/video/comment_list/        获取视频评论列表
+ * - GET  /api/douyin/v1/video/comment_reply_list/  获取评论的回复列表
+ * - POST /api/douyin/v1/video/comment_reply/       回复评论
  *
- * NOTE: 发布顶级评论（commentOnPost）抖音开放平台暂不支持，
- * 此处留占位返回 success: false。
+ * 关于 EngagementProvider 接口与抖音的不匹配点：
+ * 抖音回复评论接口需要 `(item_id, comment_id)` 二元组，而本接口只传单个
+ * `commentId`。我们用 `{itemId}:{commentId}` 复合编码绕过 — 所有从
+ * fetchPostComments 出去的 comment.id 都已带前缀，replyToComment 拿到时再解。
  *
- * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/interaction-management/comment-management-user/comment-list
+ * 顶级评论（自由发表）：抖音开放平台不开放给第三方应用，commentOnPost
+ * 显式返回 success=false。
+ *
+ * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/douyin-v2/comment/get-comment-list
  */
 @Injectable()
 export class DouyinEngagementProvider implements EngagementProvider {
@@ -25,10 +30,26 @@ export class DouyinEngagementProvider implements EngagementProvider {
     private readonly douyinService: DouyinService,
   ) {}
 
-  async getMetaPostDetail(_accountId: string, _postId: string): Promise<PostVo> {
-    // 抖音无 Meta-style post detail 端点，返回空壳
+  /** Encode (itemId, commentId) into a single string the EngagementProvider interface allows. */
+  private encodeCommentId(itemId: string, commentId: string): string {
+    return `${itemId}:${commentId}`
+  }
+
+  /** Decode the composite id; returns null if format is wrong. */
+  private decodeCommentId(composite: string): { itemId: string, commentId: string } | null {
+    const idx = composite.indexOf(':')
+    if (idx <= 0 || idx === composite.length - 1)
+      return null
     return {
-      id: '',
+      itemId: composite.slice(0, idx),
+      commentId: composite.slice(idx + 1),
+    }
+  }
+
+  async getMetaPostDetail(_accountId: string, _postId: string): Promise<PostVo> {
+    // 抖音开放平台没有等价的"单作品 metadata"端点，返回空壳
+    return {
+      id: _postId,
       platform: 'douyin',
       title: '',
       content: '',
@@ -46,8 +67,7 @@ export class DouyinEngagementProvider implements EngagementProvider {
   }
 
   async fetchUserPosts(accountId: string, _pagination: KeysetPagination | OffsetPagination | null): Promise<PostsResponseVo> {
-    this.logger.log(`fetchUserPosts called for accountId=${accountId}`)
-    // TODO: 接 /video/list/ 端点获取作者视频列表
+    this.logger.warn(`fetchUserPosts not yet wired for douyin accountId=${accountId} — needs /video/list/`)
     return {
       posts: [],
       cursor: { before: '', after: '' },
@@ -55,41 +75,85 @@ export class DouyinEngagementProvider implements EngagementProvider {
   }
 
   async fetchPostComments(accountId: string, postId: string, pagination: KeysetPagination | OffsetPagination | null): Promise<FetchPostCommentsResponse> {
-    this.logger.log(`fetchPostComments accountId=${accountId} postId=${postId}`)
-    // TODO: 接 /item/comment/list/
-    // 需要 access_token + open_id + item_id + cursor + count
-    const comments: EngagementComment[] = []
+    const cursor = Number((pagination as KeysetPagination)?.after) || 0
+    const count = (pagination as KeysetPagination)?.limit || 20
+
+    const res = await this.douyinService.getCommentList(accountId, postId, cursor, count)
+    const comments: EngagementComment[] = res.list.map(c => ({
+      id: this.encodeCommentId(postId, c.comment_id),
+      message: c.content,
+      author: { username: c.comment_user_id },
+      createdAt: new Date((c.create_time || 0) * 1000).toISOString(),
+      hasReplies: (c.reply_comment_total ?? 0) > 0,
+    }))
     return {
       comments,
       cursor: {
         before: '',
-        after: (pagination as KeysetPagination)?.after || '',
+        after: res.has_more ? String(res.cursor) : '',
       },
     }
   }
 
   async fetchCommentReplies(accountId: string, commentId: string, pagination: KeysetPagination | OffsetPagination | null): Promise<FetchPostCommentsResponse> {
-    this.logger.log(`fetchCommentReplies accountId=${accountId} commentId=${commentId}`)
-    // TODO: 接 /item/comment/reply/list/
-    const comments: EngagementComment[] = []
+    const decoded = this.decodeCommentId(commentId)
+    if (!decoded) {
+      this.logger.warn(`fetchCommentReplies received un-encoded commentId=${commentId}; douyin requires "{itemId}:{commentId}"`)
+      return { comments: [], cursor: { before: '', after: '' } }
+    }
+    const cursor = Number((pagination as KeysetPagination)?.after) || 0
+    const count = (pagination as KeysetPagination)?.limit || 20
+
+    const res = await this.douyinService.getCommentReplyList(
+      accountId,
+      decoded.itemId,
+      decoded.commentId,
+      cursor,
+      count,
+    )
+    const comments: EngagementComment[] = res.list.map(c => ({
+      id: this.encodeCommentId(decoded.itemId, c.comment_id),
+      message: c.content,
+      author: { username: c.comment_user_id },
+      createdAt: new Date((c.create_time || 0) * 1000).toISOString(),
+      hasReplies: false,
+    }))
     return {
       comments,
       cursor: {
         before: '',
-        after: (pagination as KeysetPagination)?.after || '',
+        after: res.has_more ? String(res.cursor) : '',
       },
     }
   }
 
   async commentOnPost(_accountId: string, _postId: string, _message: string): Promise<PublishCommentResponse> {
-    // 抖音开放平台不支持主动发布顶级评论
-    return { success: false, error: 'Douyin Open API does not support posting top-level comments' }
+    return {
+      success: false,
+      error: 'Douyin open platform does not allow third-party apps to post top-level comments. Use replyToComment on an existing thread instead.',
+    }
   }
 
   async replyToComment(accountId: string, commentId: string, message: string): Promise<PublishCommentResponse> {
-    this.logger.log(`replyToComment accountId=${accountId} commentId=${commentId} message=${message}`)
-    // TODO: 接 /item/comment/reply/
-    // 需要 access_token + open_id + item_id + comment_id + content
-    return { success: false, error: 'Not yet implemented — awaiting /item/comment/reply/ integration' }
+    const decoded = this.decodeCommentId(commentId)
+    if (!decoded) {
+      return {
+        success: false,
+        error: 'douyin commentId must be formatted as "{itemId}:{commentId}". Did you call fetchPostComments first?',
+      }
+    }
+    try {
+      const res = await this.douyinService.replyComment(
+        accountId,
+        decoded.itemId,
+        decoded.commentId,
+        message,
+      )
+      return { id: res.comment_id, success: true }
+    }
+    catch (e) {
+      this.logger.error(`douyin replyToComment failed accountId=${accountId} commentId=${commentId}: ${(e as Error).message}`)
+      return { success: false, error: (e as Error).message }
+    }
   }
 }

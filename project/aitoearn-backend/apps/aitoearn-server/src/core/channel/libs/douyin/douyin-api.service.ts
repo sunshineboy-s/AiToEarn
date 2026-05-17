@@ -594,6 +594,194 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
     }
   }
 
+  /**
+   * 获取视频评论列表
+   * 抖音开放平台: GET /api/douyin/v1/video/comment_list/
+   *   - Scope: video.comment
+   *   - 仅可查询自己作品下的评论（API 鉴权层强制）
+   * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/douyin-v2/comment/get-comment-list
+   * @param accessToken 用户授权 access_token
+   * @param openId 用户 open_id
+   * @param itemId 视频 item_id
+   * @param cursor 分页游标，第一页传 0
+   * @param count 每页数量，最大 50
+   */
+  async getCommentList(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    cursor: number,
+    count: number,
+  ) {
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          list: Array<{
+            comment_id: string
+            comment_user_id: string
+            content: string
+            create_time: number
+            top: boolean
+            digg_count: number
+            reply_comment_total: number
+          }>
+          cursor: number
+          has_more: boolean
+        }
+        extra: { error_code: number, description: string, logid: string }
+      }>('https://open.douyin.com/api/douyin/v1/video/comment_list/', {
+        params: {
+          open_id: openId,
+          item_id: itemId,
+          cursor,
+          count,
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+      })
+      const d = res.data
+      if (d.extra?.error_code !== 0) {
+        this.logger.error({ path: 'douyin getCommentList error', data: d })
+        return { list: [], cursor: 0, has_more: false }
+      }
+      return {
+        list: d.data.list ?? [],
+        cursor: d.data.cursor ?? 0,
+        has_more: d.data.has_more ?? false,
+      }
+    }
+    catch (error) {
+      this.logger.error({ path: 'douyin getCommentList error', data: error })
+      return { list: [], cursor: 0, has_more: false }
+    }
+  }
+
+  /**
+   * 获取评论的回复列表
+   * 抖音开放平台: GET /api/douyin/v1/video/comment_reply_list/
+   *   - Scope: video.comment
+   * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/douyin-v2/comment/get-comment-reply-list
+   * @param accessToken
+   * @param openId
+   * @param itemId 视频 item_id
+   * @param commentId 父评论 ID
+   * @param cursor
+   * @param count
+   */
+  async getCommentReplyList(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    cursor: number,
+    count: number,
+  ) {
+    try {
+      const res = await axios.get<{
+        data: {
+          error_code: number
+          description: string
+          list: Array<{
+            comment_id: string
+            comment_user_id: string
+            content: string
+            create_time: number
+            digg_count: number
+          }>
+          cursor: number
+          has_more: boolean
+        }
+        extra: { error_code: number, description: string, logid: string }
+      }>('https://open.douyin.com/api/douyin/v1/video/comment_reply_list/', {
+        params: {
+          open_id: openId,
+          item_id: itemId,
+          comment_id: commentId,
+          cursor,
+          count,
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+      })
+      const d = res.data
+      if (d.extra?.error_code !== 0) {
+        this.logger.error({ path: 'douyin getCommentReplyList error', data: d })
+        return { list: [], cursor: 0, has_more: false }
+      }
+      return {
+        list: d.data.list ?? [],
+        cursor: d.data.cursor ?? 0,
+        has_more: d.data.has_more ?? false,
+      }
+    }
+    catch (error) {
+      this.logger.error({ path: 'douyin getCommentReplyList error', data: error })
+      return { list: [], cursor: 0, has_more: false }
+    }
+  }
+
+  /**
+   * 回复视频评论（也可以发顶级评论：把 comment_id 留空 / 不传）
+   * 抖音开放平台: POST /api/douyin/v1/video/comment_reply/
+   *   - Scope: video.comment
+   *   - Note: 顶级评论的「自由发布」目前抖音并不开放给第三方，
+   *     该端点主要用途是在自己作品下回复某条已有评论。
+   * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/douyin-v2/comment/comment-reply
+   * @param accessToken
+   * @param openId
+   * @param itemId 视频 item_id
+   * @param commentId 父评论 ID
+   * @param content 回复内容
+   */
+  async replyComment(
+    accessToken: string,
+    openId: string,
+    itemId: string,
+    commentId: string,
+    content: string,
+  ): Promise<{ comment_id: string }> {
+    try {
+      const res = await axios.post<{
+        data: {
+          error_code: number
+          description: string
+          comment_id: string
+        }
+        extra: { error_code: number, description: string, logid: string }
+      }>(
+        'https://open.douyin.com/api/douyin/v1/video/comment_reply/',
+        {
+          item_id: itemId,
+          comment_id: commentId,
+          content,
+        },
+        {
+          params: { open_id: openId },
+          headers: {
+            'Content-Type': 'application/json',
+            'access-token': accessToken,
+          },
+        },
+      )
+      const d = res.data
+      if (d.extra?.error_code !== 0 || d.data?.error_code !== 0) {
+        this.logger.error({ path: 'douyin replyComment error', data: d })
+        throw new Error(d.data?.description || d.extra?.description || 'douyin replyComment failed')
+      }
+      return { comment_id: d.data.comment_id }
+    }
+    catch (error) {
+      this.logger.error({ path: 'douyin replyComment error', data: error })
+      throw new Error(error instanceof Error ? error.message : String(error))
+    }
+  }
+
   async deleteArchive(accessToken: string, videoId: string) {
     this.logger.log('deleteArchive', accessToken, videoId)
     return {
