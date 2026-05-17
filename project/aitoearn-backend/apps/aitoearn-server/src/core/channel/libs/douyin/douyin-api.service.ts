@@ -436,59 +436,161 @@ client_token 的有效时间为 2 个小时，重复获取 client_token 后会�
   }
 
   /**
-   * 获取用户数据
+   * 获取用户数据（粉丝 / 作品 / 关注）
+   * 抖音开放平台: /data/external/user/item/
+   * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/account-data
    * @param accessToken
-   * @returns
    */
   async getUserStat(accessToken: string) {
-    this.logger.log('getUserStat', accessToken)
-    return {
-      arc_passed_total: 0,
-      follower: 0,
-      following: 0,
+    try {
+      const res = await axios.post<{
+        data: {
+          fans_count: number
+          following_count: number
+          total_favorited: number
+          aweme_count: number
+        }
+        extra: { error_code: number, description: string, logid: string }
+      }>('https://open.douyin.com/data/external/user/item/', {}, {
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+      })
+      const d = res.data
+      if (d.extra?.error_code !== 0) {
+        this.logger.error({ path: 'douyin getUserStat error', data: d })
+        // fallback to zero to not break upstream
+        return { arc_passed_total: 0, follower: 0, following: 0 }
+      }
+      return {
+        arc_passed_total: d.data.aweme_count ?? 0,
+        follower: d.data.fans_count ?? 0,
+        following: d.data.following_count ?? 0,
+      }
+    }
+    catch (error) {
+      this.logger.error({ path: 'douyin getUserStat error', data: error })
+      return { arc_passed_total: 0, follower: 0, following: 0 }
     }
   }
 
   /**
-   * 获取稿件数据
+   * 获取单个视频数据（播放 / 点赞 / 评论 / 分享 / 收藏）
+   * 抖音开放平台: /data/external/item/base/
+   * @see https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/data-permission/video-data/external-video-data
    * @param accessToken
-   * @param resourceId
-   * @returns
+   * @param resourceId 视频 item_id
    */
   async getArcStat(
     accessToken: string,
     resourceId: string,
   ) {
-    this.logger.log('getArcStat', accessToken, resourceId)
-    return {
-      coin: 0,
-      danmaku: 0,
-      favorite: 0,
-      like: 0,
-      ptime: 0,
-      reply: 0,
-      share: 0,
-      title: '',
-      view: 0,
+    try {
+      const res = await axios.post<{
+        data: {
+          result_list: Array<{
+            play: number
+            like: number
+            comment: number
+            share: number
+            download: number
+            forward: number
+            title: string
+            date: string
+          }>
+        }
+        extra: { error_code: number, description: string, logid: string }
+      }>('https://open.douyin.com/data/external/item/base/', {
+        item_id: resourceId,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+      })
+      const d = res.data
+      if (d.extra?.error_code !== 0 || !d.data?.result_list?.length) {
+        this.logger.error({ path: 'douyin getArcStat error', data: d })
+        return { coin: 0, danmaku: 0, favorite: 0, like: 0, ptime: 0, reply: 0, share: 0, title: '', view: 0 }
+      }
+      const item = d.data.result_list[0]
+      return {
+        coin: 0,
+        danmaku: 0,
+        favorite: item.download ?? 0,
+        like: item.like ?? 0,
+        ptime: 0,
+        reply: item.comment ?? 0,
+        share: item.share ?? 0,
+        title: item.title ?? '',
+        view: item.play ?? 0,
+      }
+    }
+    catch (error) {
+      this.logger.error({ path: 'douyin getArcStat error', data: error })
+      return { coin: 0, danmaku: 0, favorite: 0, like: 0, ptime: 0, reply: 0, share: 0, title: '', view: 0 }
     }
   }
 
   /**
-   * 获取稿件增量数据数据
+   * 获取用户视频增量数据（最近 7 天）
+   * 抖音开放平台: /data/external/user/item/
+   * NOTE: 抖音开放平台把 item-level 增量和 user-level 数据放在同一端点，
+   * 具体返回哪些字段取决于权限 scope。此处仍返回统一形状，不破坏上层接口。
    * @param accessToken
-   * @returns
    */
   async getArcIncStat(accessToken: string) {
-    this.logger.log('getArcIncStat', accessToken)
-    return {
-      inc_click: 0,
-      inc_coin: 0,
-      inc_dm: 0,
-      inc_elec: 0,
-      inc_fav: 0,
-      inc_like: 0,
-      inc_reply: 0,
-      inc_share: 0,
+    try {
+      const res = await axios.post<{
+        data: {
+          result_list: Array<{
+            new_play: number
+            new_share: number
+            new_comment: number
+            new_like: number
+            date: string
+          }>
+        }
+        extra: { error_code: number, description: string, logid: string }
+      }>('https://open.douyin.com/data/external/user/item/', {
+        date_type: 7,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': accessToken,
+        },
+      })
+      const d = res.data
+      if (d.extra?.error_code !== 0 || !d.data?.result_list?.length) {
+        this.logger.error({ path: 'douyin getArcIncStat error', data: d })
+        return { inc_click: 0, inc_coin: 0, inc_dm: 0, inc_elec: 0, inc_fav: 0, inc_like: 0, inc_reply: 0, inc_share: 0 }
+      }
+      // Sum across days
+      let incLike = 0
+      let incReply = 0
+      let incShare = 0
+      let incClick = 0
+      for (const item of d.data.result_list) {
+        incClick += item.new_play ?? 0
+        incLike += item.new_like ?? 0
+        incReply += item.new_comment ?? 0
+        incShare += item.new_share ?? 0
+      }
+      return {
+        inc_click: incClick,
+        inc_coin: 0,
+        inc_dm: 0,
+        inc_elec: 0,
+        inc_fav: 0,
+        inc_like: incLike,
+        inc_reply: incReply,
+        inc_share: incShare,
+      }
+    }
+    catch (error) {
+      this.logger.error({ path: 'douyin getArcIncStat error', data: error })
+      return { inc_click: 0, inc_coin: 0, inc_dm: 0, inc_elec: 0, inc_fav: 0, inc_like: 0, inc_reply: 0, inc_share: 0 }
     }
   }
 
