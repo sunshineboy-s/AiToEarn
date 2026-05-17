@@ -7,7 +7,10 @@ import { RelayAccountException } from '../../relay/relay-account.exception'
 import { ChannelAccountService } from '../platforms/channel-account.service'
 import { BilibiliDataService } from './bilibili-data.service'
 import { DataCubeBase } from './data.base'
+import { DouyinDataService } from './douyin-data.service'
+import { TiktokDataService } from './tiktok-data.service'
 import { WxGzhDataService } from './wx-gzh-data.service'
+import { XhsDataService } from './xhs-data.service'
 import { YoutubeDataService } from './youtube-data.service'
 
 @ApiTags('Data/DataCube')
@@ -18,10 +21,16 @@ export class DataCubeController {
   constructor(
     readonly channelAccountService: ChannelAccountService,
     readonly bilibiliDataService: BilibiliDataService,
+    readonly douyinDataService: DouyinDataService,
+    readonly tiktokDataService: TiktokDataService,
+    readonly xhsDataService: XhsDataService,
     readonly youtubeDataService: YoutubeDataService,
     readonly wxGzhDataService: WxGzhDataService,
   ) {
     this.dataCubeMap.set(AccountType.BILIBILI, bilibiliDataService)
+    this.dataCubeMap.set(AccountType.Douyin, douyinDataService)
+    this.dataCubeMap.set(AccountType.TIKTOK, tiktokDataService)
+    this.dataCubeMap.set(AccountType.Xhs, xhsDataService)
     this.dataCubeMap.set(AccountType.YOUTUBE, youtubeDataService)
     this.dataCubeMap.set(AccountType.WxGzh, wxGzhDataService)
   }
